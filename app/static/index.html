@@ -395,7 +395,7 @@ function renderExpiring(ex){
     `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
     (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
     `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span>`+
-    `<button class="lnk" data-fix="${d.id}" title="Edit details or expiry date">Edit</button>`+
+    `<button class="lnk" data-newver="${d.id}" title="Upload the renewed document; this one is kept in history">New version</button>`+
     (k==='expired'&&canAck(d.category)?`<label class="ack" title="Hide from the Expired list"><input type="checkbox" data-ack="${d.id}"> Acknowledge</label>`:'')+
     '</div>').join('')).join('');
   h+=rows?`<div class="rows" style="margin-top:10px">${rows}</div>`:'<div class="empties">Nothing expires in the next 6 months.</div>';
@@ -459,6 +459,7 @@ $('#home').onclick=e=>{
   const w=e.target.closest('[data-who]');if(w)return setMember(w.dataset.who);
   const g=e.target.closest('[data-go]');if(g)return show(g.dataset.go);
   const fx=e.target.closest('[data-fix]');if(fx)return openDocDialog('edit',docsById[fx.dataset.fix]);
+  const nv=e.target.closest('[data-newver]');if(nv)return openDocDialog('replace',docsById[nv.dataset.newver]);
   const d=e.target.closest('[data-doc]');if(d)return viewDoc(docsById[d.dataset.doc]);
   const c=e.target.closest('[data-cat]');if(c)return openCat(c.dataset.cat);
   const b=e.target.closest('[data-binder]');if(b){openBinder=+b.dataset.binder;show('binders')}
