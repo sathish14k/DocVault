@@ -24,7 +24,7 @@ nav button.on{background:var(--soft);color:var(--ink);font-weight:550}
 .active-binder select,.viewing select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 8px;font-size:13px}
 main{max-width:960px;margin:0 auto;padding:28px 24px 80px}
 input,select,textarea,button{font:inherit;color:inherit}
-input[type=text],input[type=search],input[type=date],select,textarea{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input[type=text],input[type=search],input[type=date],input[type=month],select,textarea{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--line2);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 8%,transparent)}
 button.btn{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 13px;cursor:pointer;transition:border-color .15s,background .15s}
 button.btn:hover{border-color:var(--line2);background:var(--soft)}
@@ -70,6 +70,11 @@ label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13
 .cell .cn{font-weight:550;font-size:14.5px}
 .cell .cc{color:var(--faint);font-size:13px;font-variant-numeric:tabular-nums}
 .cell.fill{cursor:default}.cell.fill:hover{background:var(--card)}
+.cell .big{font-size:24px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2}
+.cell.due .big{color:var(--warn)}.cell.over .big{color:var(--danger)}
+.eg{padding:7px 16px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);background:var(--soft);border-top:1px solid var(--line)}
+.eg:first-child{border-top:0}
+.rw .m.due{color:var(--warn)}.rw .m.over{color:var(--danger)}
 .empties{margin-top:10px;font-size:13px;color:var(--faint);line-height:2}
 .empties button{background:none;border:0;padding:0 2px;color:var(--mute);cursor:pointer;font-size:13px}
 .empties button:hover{color:var(--ink);text-decoration:underline}
@@ -93,6 +98,7 @@ html,body{overflow-x:hidden}
 .title:hover{text-decoration:underline;text-underline-offset:3px}
 .badge{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:99px;background:var(--soft);color:var(--ink2);margin-left:6px;vertical-align:1px;font-weight:500}
 .badge.old{background:var(--warn-bg);color:var(--warn)}
+.badge.exp{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
 .badge.who{background:none;border:1px solid var(--line);color:var(--mute)}
 .meta{color:var(--mute);font-size:13px;margin-top:2px}
 .snip{font-size:13px;margin-top:6px;color:var(--mute)}
@@ -207,7 +213,10 @@ a.dl{color:var(--hi)}
       <div class="f"><span>Belongs to</span><select id="fMember"></select></div>
       <div class="f"><span>Category (type a new one to create it)</span><input type="text" id="fCat" list="catData"></div>
     </div>
-    <div class="f"><span>Document date</span><input type="date" id="fDate"></div>
+    <div class="row">
+      <div class="f"><span>Document date</span><input type="date" id="fDate"></div>
+      <div class="f"><span id="fExpLbl">Expiry month (optional)</span><input type="month" id="fExp"></div>
+    </div>
     <div class="f"><span>Tags (comma separated)</span><input type="text" id="fTags"></div>
     <div class="f"><span>Notes</span><textarea id="fNotes" rows="2"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -344,22 +353,58 @@ async function refreshLibrary(){
 }
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+/* ---------- expiry ---------- */
+/* Passports, leases and rental/service contracts need a full expiry date; others may have month/year. */
+let expRe=null;
+const needsExpiry=(...t)=>!!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' '));
+async function loadExpiryRules(){
+  const r=await api('/api/expiry-rules');
+  expRe=new RegExp('\\b(?:'+r.required.map(k=>k.replace(/ /g,'\\s+')).join('|')+')s?\\b');
+}
+function expiryEnd(v){if(!v)return null;const[y,m,d]=v.split('-').map(Number);return d?new Date(y,m-1,d):new Date(y,m,0)}
+function daysLeft(v){const e=expiryEnd(v);if(!e)return null;const t=new Date();t.setHours(0,0,0,0);return Math.round((e-t)/864e5)}
+function relDays(n){
+  if(n<0)return -n>60?`expired ${Math.round(-n/30.4)} months ago`:`expired ${plural(-n,'day')} ago`;
+  return n===0?'expires today':n>60?`in ${Math.round(n/30.4)} months`:`in ${plural(n,'day')}`;
+}
+function expBadge(d){
+  if(!d.expiry_date)return d.status==='current'&&needsExpiry(d.title,d.tags,d.filename)?'<span class="badge old">No expiry date</span>':'';
+  const n=daysLeft(d.expiry_date);
+  return `<span class="badge ${n<0?'exp':n<=183?'old':''}" title="${esc(relDays(n))}">${n<0?'Expired':'Expires'} ${esc(d.expiry_date)}</span>`;
+}
+function renderExpiring(ex){
+  const n1=ex.month1.length,n3=n1+ex.month3.length,n6=n3+ex.month6.length;
+  const tile=(label,n,cls)=>`<div class="cell fill ${n?cls:''}"><span class="cc">${label}</span><span class="big">${n}</span></div>`;
+  let h='<div class="sec"><div class="sh"><h3>Expiring soon</h3></div><div class="grid">'+
+    (ex.expired.length?tile('Already expired',ex.expired.length,'over'):'')+
+    tile('Next 1 month',n1,'over')+tile('Next 3 months',n3,'due')+tile('Next 6 months',n6,'')+'</div>';
+  const groups=[['expired','Expired','over'],['month1','Within 1 month','over'],['month3','In 1–3 months','due'],['month6','In 3–6 months','']];
+  const rows=groups.filter(([k])=>ex[k].length).map(([k,label,cls])=>`<div class="eg">${label}</div>`+ex[k].map(d=>
+    `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
+    (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
+    `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span></div>`).join('')).join('');
+  h+=rows?`<div class="rows" style="margin-top:10px">${rows}</div>`:'<div class="empties">Nothing expires in the next 6 months.</div>';
+  if(ex.missing.length)h+='<div class="empties">Needs an expiry date: '+
+    ex.missing.map(d=>`<button data-fix="${d.id}">${esc(d.title)}${curMember?'':' ('+esc(d.member||'Shared')+')'}</button>`).join(' · ')+'</div>';
+  return h+'</div>';
+}
 const extOf=f=>((f||'').split('.').pop()||'').slice(0,4).toUpperCase();
 function setHomeMode(on){$('#library').classList.toggle('is-home',on);$('#hero').hidden=!on}
 async function renderHome(){
   $('#crumb').hidden=true;$('#docs').innerHTML='';setHomeMode(true);
-  const [sum,all,recent]=await Promise.all([
+  const [sum,all,recent,ex]=await Promise.all([
     api('/api/summary?'+new URLSearchParams({member:curMember})),
     curMember?api('/api/summary'):null,
-    api('/api/documents?'+new URLSearchParams({member:curMember,limit:6}))]);
+    api('/api/documents?'+new URLSearchParams({member:curMember,limit:6})),
+    api('/api/expiring?'+new URLSearchParams({member:curMember}))]);
   const tot=all||sum;
-  recent.forEach(d=>docsById[d.id]=d);
+  [recent,...Object.values(ex)].flat().forEach(d=>docsById[d.id]=d);
   const who=curMember?(curMember===SHARED?'Shared documents':curMember):'Family documents';
   const rel=members.find(m=>m.name===curMember)?.relation;
   $('#hero').innerHTML=`<h2>${esc(who)}</h2><div class="sub">${plural(sum.total,'document')}`+
     (curMember?(rel?' · '+esc(rel):'')+' · <a data-who="">Whole family</a>'
       :` · ${plural(members.length,'person')}`.replace('persons','people')+(binders.length?` · ${plural(binders.length,'binder')}`:''))+'</div>';
-  let h='';
+  let h=renderExpiring(ex);
   // people
   const chip=(v,label,n,av)=>`<button class="chip${curMember===v?' on':''}" data-who="${esc(v)}"><span class="av">${av}</span><span class="lbl">${esc(label)}</span> <span class="n">${n}</span></button>`;
   h+='<div class="sec"><div class="sh"><h3>People</h3><button class="more" data-go="family">Manage</button></div>'+
@@ -390,6 +435,7 @@ $('#hero').onclick=e=>{const w=e.target.closest('[data-who]');if(w)setMember(w.d
 $('#home').onclick=e=>{
   const w=e.target.closest('[data-who]');if(w)return setMember(w.dataset.who);
   const g=e.target.closest('[data-go]');if(g)return show(g.dataset.go);
+  const fx=e.target.closest('[data-fix]');if(fx)return openDocDialog('edit',docsById[fx.dataset.fix]);
   const d=e.target.closest('[data-doc]');if(d)return viewDoc(docsById[d.dataset.doc]);
   const c=e.target.closest('[data-cat]');if(c)return openCat(c.dataset.cat);
   const b=e.target.closest('[data-binder]');if(b){openBinder=+b.dataset.binder;show('binders')}
@@ -403,6 +449,7 @@ function docHtml(d){
     ${d.version>1||old?`<span class="badge ${old?'old':''}">${old?'superseded · ':''}v${d.version}</span>`:''}
     <span class="badge who">${esc(d.member||'Shared')}</span>
     ${d.category?`<span class="badge">${esc(d.category)}</span>`:''}
+    ${expBadge(d)}
     <div class="meta">${esc(d.filename)} · ${fmtSize(d.size)}${d.doc_date?' · '+esc(d.doc_date):''}${d.tags?' · '+esc(d.tags):''}</div>
     ${d.notes?`<div class="meta">${esc(d.notes)}</div>`:''}
     ${d.snippet?`<div class="snip">${snip(d.snippet)}</div>`:''}
@@ -442,9 +489,22 @@ function openDocDialog(m,d){
   $('#fMember').value=d?(d.member||SHARED):curMember;
   if(d){$('#fTitle').value=d.title;$('#fCat').value=d.category||'';$('#fDate').value=d.doc_date||'';$('#fTags').value=d.tags||'';$('#fNotes').value=m==='edit'?d.notes||'':''}
   if(m==='new'&&curCat&&curCat!==NO_CAT)$('#fCat').value=curCat;
+  syncExpiry(m==='edit'?d.expiry_date||'':'');  // a new version gets its own expiry
   $('#dlgDoc').showModal();
 }
 $('#btnUpload').onclick=()=>openDocDialog('new');
+/* Switch the expiry field between required full date and optional month as the title/tags/file change. */
+function syncExpiry(v){
+  const inp=$('#fExp');if(v===undefined)v=inp.value;
+  const fn=$('#fFile').files[0]?.name||target?.filename||'';
+  const req=!(mode==='edit'&&target.status!=='current')&&needsExpiry($('#fTitle').value||fn,$('#fTags').value,fn);
+  const full=req||v.length===10;
+  inp.type=full?'date':'month';inp.value=full?(v.length===10?v:''):v.slice(0,7);
+  inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
+  $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
+}
+['#fTitle','#fTags'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
+$('#fFile').addEventListener('change',()=>syncExpiry());
 $('#dlgCancel').onclick=()=>$('#dlgDoc').close();
 $('#docForm').onsubmit=async e=>{
   e.preventDefault();const btn=$('#dlgSave');
@@ -454,12 +514,12 @@ $('#docForm').onsubmit=async e=>{
   try{
     btn.disabled=true;btn.textContent='Saving…';
     if(mode==='edit'){
-      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
+      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
     }else{
       const f=$('#fFile').files[0];if(!f){toast('Choose a file');return}
       const fd=new FormData();fd.append('file',f);
       fd.append('title',mode==='replace'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
-      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);
+      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);
       fd.append('tags',$('#fTags').value);fd.append('notes',$('#fNotes').value);
       if(mode==='replace')fd.append('supersedes_id',target.id);
       if(forceNext)fd.append('force','true');
@@ -566,7 +626,7 @@ async function loadExports(){
 }
 
 /* ---------- init ---------- */
-(async()=>{curCat=catFromHash();await loadMembers();await loadCats();await loadBinders();refreshLibrary()})();
+(async()=>{curCat=catFromHash();await loadExpiryRules();await loadMembers();await loadCats();await loadBinders();refreshLibrary()})();
 </script>
 </body>
 </html>

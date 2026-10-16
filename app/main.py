@@ -2,6 +2,7 @@
 
 Files live on disk under DATA_DIR/files/<id>/, metadata + full-text index in SQLite (FTS5).
 """
+import calendar
 import hashlib
 import mimetypes
 import os
@@ -12,7 +13,7 @@ import sqlite3
 import subprocess
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -34,6 +35,11 @@ HL_S, HL_E = "\x01", "\x02"  # snippet highlight markers (escaped client-side)
 NO_CAT = "__none__"  # category filter value meaning "no category"
 SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no member)
 
+# Documents whose title, tags or file name mention one of these must carry a full expiry date
+# (day, month, year). Any other document may carry an optional month/year expiry.
+EXPIRY_REQUIRED = ["passport", "lease", "service contract", "rental contract", "tenancy contract"]
+_EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
+
 DEFAULT_CATEGORIES = [
     "Identity", "Visa & Immigration", "Education", "Employment", "Finance & Tax",
     "Property & Tenancy", "Vehicle", "Medical", "Insurance", "Certificates", "Other",
@@ -51,7 +57,7 @@ CREATE TABLE IF NOT EXISTS documents(
   filename TEXT NOT NULL,
   stored_path TEXT NOT NULL DEFAULT '',
   mime TEXT, size INTEGER, sha256 TEXT,
-  doc_date TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
+  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'current',
   supersedes_id INTEGER, superseded_by_id INTEGER,
   created_at TEXT NOT NULL);
@@ -70,7 +76,7 @@ FTS_SQL = ("CREATE VIRTUAL TABLE docs_fts USING fts5("
 BASE_SQL = ("SELECT d.*, c.name AS category, m.name AS member FROM documents d "
             "LEFT JOIN categories c ON c.id = d.category_id "
             "LEFT JOIN members m ON m.id = d.member_id")
-FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "notes", "tags", "status",
+FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "notes", "tags", "status",
           "supersedes_id", "superseded_by_id", "created_at", "category", "member_id", "member")
 
 
@@ -88,6 +94,8 @@ def init():
     # migrations for vaults created before family members existed
     if "member_id" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
         con.execute("ALTER TABLE documents ADD COLUMN member_id INTEGER REFERENCES members(id)")
+    if "expiry_date" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
+        con.execute("ALTER TABLE documents ADD COLUMN expiry_date TEXT DEFAULT ''")
     fts = con.execute("SELECT sql FROM sqlite_master WHERE name='docs_fts'").fetchone()
     if not fts or "member" not in fts["sql"]:
         con.execute("DROP TABLE IF EXISTS docs_fts")
@@ -188,6 +196,45 @@ def member_filter(member: str, where: list, args: list):
         args.append(member)
 
 
+def needs_expiry(*texts) -> bool:
+    s = re.sub(r"[_\-.]+", " ", " ".join(t or "" for t in texts).lower())
+    return bool(_EXPIRY_RE.search(s))
+
+
+def clean_expiry(v: Optional[str], required: bool = False) -> str:
+    """Expiry is YYYY-MM-DD, or YYYY-MM (month/year only) for documents that do not require a full date."""
+    v = (v or "").strip()
+    if v:
+        try:
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+                date.fromisoformat(v)
+            elif re.fullmatch(r"\d{4}-\d{2}", v):
+                date.fromisoformat(v + "-01")
+            else:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(400, "Expiry must be a date (YYYY-MM-DD) or a month (YYYY-MM)")
+    if required and len(v) != 10:
+        raise HTTPException(400, "This document needs a full expiry date (day, month and year)")
+    return v
+
+
+def expiry_day(v: str) -> Optional[date]:
+    """Last valid day: the date itself, or the last day of the month for month-only expiries."""
+    if len(v) == 10:
+        return date.fromisoformat(v)
+    if len(v) == 7:
+        y, m = map(int, v.split("-"))
+        return date(y, m, calendar.monthrange(y, m)[1])
+    return None
+
+
+def add_months(d: date, n: int) -> date:
+    y, m = divmod(d.month - 1 + n, 12)
+    y += d.year
+    return date(y, m + 1, min(d.day, calendar.monthrange(y, m + 1)[1]))
+
+
 HEIC_EXT = {".heic", ".heif"}
 
 
@@ -279,6 +326,40 @@ def summary(member: str = ""):
         f"WHERE {' AND '.join(where)}", args).fetchone()
     con.close()
     return dict(r)
+
+
+@app.get("/api/expiry-rules")
+def expiry_rules():
+    return {"required": EXPIRY_REQUIRED}
+
+
+@app.get("/api/expiring")
+def expiring(member: str = ""):
+    """Current documents expiring within 6 months (or already expired), bucketed by calendar months,
+    plus documents that require an expiry date but have none."""
+    where, args = ["d.status='current'"], []
+    member_filter(member, where, args)
+    today = date.today()
+    limits = [("month1", add_months(today, 1)), ("month3", add_months(today, 3)), ("month6", add_months(today, 6))]
+    out = {"expired": [], "month1": [], "month3": [], "month6": [], "missing": []}
+    con = db()
+    try:
+        for r in con.execute(BASE_SQL + " WHERE " + " AND ".join(where), args).fetchall():
+            exp = expiry_day(r["expiry_date"] or "")
+            if not exp:
+                if needs_expiry(r["title"], r["tags"], r["filename"]):
+                    out["missing"].append(doc_out(con, r))
+                continue
+            bucket = "expired" if exp < today else next((k for k, lim in limits if exp <= lim), None)
+            if bucket:
+                d = doc_out(con, r)
+                d["expires_on"], d["days_left"] = exp.isoformat(), (exp - today).days
+                out[bucket].append(d)
+    finally:
+        con.close()
+    for k, v in out.items():
+        v.sort(key=(lambda d: d["title"].lower()) if k == "missing" else (lambda d: d["days_left"]))
+    return out
 
 
 # ---------- family members ----------
@@ -433,6 +514,7 @@ def upload_document(
     category: str = Form(""),
     member: Optional[str] = Form(None),  # "" = shared; omitted = keep the superseded doc's member
     doc_date: str = Form(""),
+    expiry_date: str = Form(""),
     notes: str = Form(""),
     tags: str = Form(""),
     supersedes_id: Optional[int] = Form(None),
@@ -477,11 +559,12 @@ def upload_document(
         title = title.strip() or (old["title"] if old else Path(fname).stem)
         cid = cat_id(con, category) if category.strip() else (old["category_id"] if old else None)
         mid = member_id(con, member) if member is not None else (old["member_id"] if old else None)
+        expiry_date = clean_expiry(expiry_date, needs_expiry(title, tags, fname))
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         cur = con.execute(
-            "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,notes,tags,"
-            "created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (title, cid, mid, fname, mime, size, digest, doc_date.strip(), notes.strip(), tags.strip(),
+            "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,notes,"
+            "tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (title, cid, mid, fname, mime, size, digest, doc_date.strip(), expiry_date, notes.strip(), tags.strip(),
              datetime.now().isoformat(timespec="seconds")))
         i = cur.lastrowid
         dest_dir = FILES / str(i)
@@ -512,6 +595,7 @@ class DocPatch(BaseModel):
     category: Optional[str] = None
     member: Optional[str] = None  # "" = shared
     doc_date: Optional[str] = None
+    expiry_date: Optional[str] = None
     notes: Optional[str] = None
     tags: Optional[str] = None
 
@@ -540,6 +624,11 @@ def patch_document(i: int, p: DocPatch):
             v = getattr(p, f)
             if v is not None:
                 con.execute(f"UPDATE documents SET {f}=? WHERE id=?", (v.strip(), i))
+        if p.expiry_date is not None:
+            con.execute("UPDATE documents SET expiry_date=? WHERE id=?", (clean_expiry(p.expiry_date), i))
+        r = get_row(con, i)
+        if r["status"] == "current" and needs_expiry(r["title"], r["tags"], r["filename"]):
+            clean_expiry(r["expiry_date"], required=True)  # uncommitted changes are discarded on close
         index_doc(con, i)
         con.commit()
         return doc_out(con, get_row(con, i))
