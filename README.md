@@ -14,7 +14,7 @@ Private document vault for your home server. Nothing leaves the machine: no clou
 - Permit categories: **Visa & Immigration** and **Drivers License** share the same rules (full expiry date, type + issuing country, validity, Acknowledge as expired); the type field is "Visa type" or "License type" with its own suggestions. Add or rename categories in `PERMIT_CATEGORIES` in `app/main.py`. Documents that need a full expiry date but have none, or only a month, are listed under "Needs a full expiry date".
 - Supersede: "New version" replaces the current document; the old one is kept, hidden by default, visible via "Show superseded" and the History button.
 - Binders: search, click "+ Binder" on each document, reorder, then export as a **combined PDF** (with bookmarks, Word/Excel/images converted) or as a **numbered folder + zip** with an index.txt.
-- Reader: built-in viewer for PDFs, images, text; Office files are rendered to PDF for viewing.
+- Reader: built-in viewer for PDFs, images, text; Office files are rendered to PDF for viewing. **Download as JPEG** saves each page as a 200 dpi JPEG (one page: a .jpg; several: a .zip of `<title>_p01.jpg`, `_p02.jpg`, ...).
 
 ## Deploy on ND-Homeserver
 ```bash

@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from pypdf import PdfReader, PdfWriter
+from starlette.background import BackgroundTask
 
 from .countries import COUNTRIES
 from .extract import IMG_EXT, extract_text
@@ -847,6 +848,45 @@ def document_preview(i: int):
         raise HTTPException(415, "No preview available for this file type. Use download.")
     return FileResponse(pdf, media_type="application/pdf", filename=f"{p.stem}.pdf",
                         content_disposition_type="inline")
+
+
+@app.get("/api/documents/{i}/jpeg")
+def document_jpeg(i: int, dpi: int = 200):
+    """Each page as a JPEG: one page -> .jpg, several -> .zip of <title>_p01.jpg, _p02.jpg, ..."""
+    con = db()
+    try:
+        r = get_row(con, i)
+    finally:
+        con.close()
+    p = doc_path(r)
+    if p.suffix.lower() in IMG_EXT:
+        raise HTTPException(400, "This document is already an image. Use Download.")
+    try:
+        pdf = as_pdf(i, p)
+    except Exception:
+        raise HTTPException(415, "This file type cannot be converted to pages.")
+    work = Path(tempfile.mkdtemp(dir=DATA))
+    try:
+        subprocess.run(["pdftoppm", "-jpeg", "-jpegopt", "quality=90", "-r", str(max(72, min(dpi, 300))),
+                        str(pdf), str(work / "page")], check=True, timeout=600, capture_output=True)
+        pages = sorted(work.glob("page-*.jpg"), key=lambda f: int(f.stem.rsplit("-", 1)[1]))
+        if not pages:
+            raise HTTPException(422, "No pages could be rendered from this document.")
+        base = safe(r["title"])
+        cleanup = BackgroundTask(shutil.rmtree, work, ignore_errors=True)
+        if len(pages) == 1:
+            return FileResponse(pages[0], media_type="image/jpeg", filename=f"{base}.jpg", background=cleanup)
+        zpath = work / f"{base}_pages.zip"
+        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:  # JPEGs are already compressed
+            for n, f in enumerate(pages, 1):
+                z.write(f, f"{base}_p{n:02d}.jpg")
+        return FileResponse(zpath, media_type="application/zip", filename=zpath.name, background=cleanup)
+    except subprocess.CalledProcessError:
+        shutil.rmtree(work, ignore_errors=True)
+        raise HTTPException(422, "Could not render this document's pages (it may be password protected).")
+    except Exception:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
 
 
 # ---------- binders (collections) ----------

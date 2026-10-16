@@ -244,6 +244,7 @@ a.dl{color:var(--hi)}
     <strong id="vTitle" style="flex:1"></strong>
     <a id="vOpen" class="dl" target="_blank">Open in tab</a>
     <a id="vDown" class="dl">Download</a>
+    <a id="vJpg" class="dl" title="One JPEG per page (a .zip when there are several pages)">Download as JPEG</a>
     <button class="btn sm" id="vClose">Close</button>
   </div>
   <iframe id="vFrame"></iframe>
@@ -613,6 +614,7 @@ function viewDoc(d){
   $('#vFrame').src='/api/documents/'+d.id+'/preview';
   $('#vOpen').href='/api/documents/'+d.id+'/preview';
   $('#vDown').href='/api/documents/'+d.id+'/file?download=true';
+  $('#vJpg').href='/api/documents/'+d.id+'/jpeg';$('#vJpg').hidden=(d.mime||'').startsWith('image/');
   $('#dlgView').showModal();
 }
 $('#vClose').onclick=()=>{$('#dlgView').close();$('#vFrame').src='about:blank'};
