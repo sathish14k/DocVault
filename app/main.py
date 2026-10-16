@@ -39,6 +39,8 @@ SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no
 # (day, month, year). Any other document may carry an optional month/year expiry.
 # "pp" is the passport abbreviation used in file names such as KP_PP_New_2024.pdf.
 EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract"]
+# Every document filed under one of these categories also needs a full expiry date.
+EXPIRY_REQUIRED_CATEGORIES = ["Visa & Immigration"]
 _EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
 
 DEFAULT_CATEGORIES = [
@@ -197,7 +199,9 @@ def member_filter(member: str, where: list, args: list):
         args.append(member)
 
 
-def needs_expiry(*texts) -> bool:
+def needs_expiry(category: Optional[str], *texts) -> bool:
+    if (category or "").strip().lower() in (c.lower() for c in EXPIRY_REQUIRED_CATEGORIES):
+        return True
     s = re.sub(r"[_\-.]+", " ", " ".join(t or "" for t in texts).lower())
     return bool(_EXPIRY_RE.search(s))
 
@@ -331,7 +335,7 @@ def summary(member: str = ""):
 
 @app.get("/api/expiry-rules")
 def expiry_rules():
-    return {"required": EXPIRY_REQUIRED}
+    return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES}
 
 
 @app.get("/api/expiring")
@@ -348,7 +352,7 @@ def expiring(member: str = ""):
         for r in con.execute(BASE_SQL + " WHERE " + " AND ".join(where), args).fetchall():
             exp = expiry_day(r["expiry_date"] or "")
             if not exp:
-                if needs_expiry(r["title"], r["tags"], r["filename"]):
+                if needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):
                     out["missing"].append(doc_out(con, r))
                 continue
             bucket = "expired" if exp < today else next((k for k, lim in limits if exp <= lim), None)
@@ -560,7 +564,8 @@ def upload_document(
         title = title.strip() or (old["title"] if old else Path(fname).stem)
         cid = cat_id(con, category) if category.strip() else (old["category_id"] if old else None)
         mid = member_id(con, member) if member is not None else (old["member_id"] if old else None)
-        expiry_date = clean_expiry(expiry_date, needs_expiry(title, tags, fname))
+        cat_name = category.strip() or (old["category"] if old else "")
+        expiry_date = clean_expiry(expiry_date, needs_expiry(cat_name, title, tags, fname))
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         cur = con.execute(
             "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,notes,"
@@ -628,7 +633,7 @@ def patch_document(i: int, p: DocPatch):
         if p.expiry_date is not None:
             con.execute("UPDATE documents SET expiry_date=? WHERE id=?", (clean_expiry(p.expiry_date), i))
         r = get_row(con, i)
-        if r["status"] == "current" and needs_expiry(r["title"], r["tags"], r["filename"]):
+        if r["status"] == "current" and needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):
             clean_expiry(r["expiry_date"], required=True)  # uncommitted changes are discarded on close
         index_doc(con, i)
         con.commit()

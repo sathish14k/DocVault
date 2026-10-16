@@ -359,11 +359,14 @@ async function refreshLibrary(){
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
 /* ---------- expiry ---------- */
-/* Passports, leases and rental/service contracts need a full expiry date; others may have month/year. */
-let expRe=null;
-const needsExpiry=(...t)=>!!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' '));
+/* Passports, leases, rental/service contracts and Visa & Immigration documents need a full expiry date;
+   others may have month/year. */
+let expRe=null,expCats=[];
+const needsExpiry=(cat,...t)=>expCats.includes((cat||'').trim().toLowerCase())||
+  !!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' '));
 async function loadExpiryRules(){
   const r=await api('/api/expiry-rules');
+  expCats=r.categories.map(c=>c.toLowerCase());
   expRe=new RegExp('\\b(?:'+r.required.map(k=>k.replace(/ /g,'\\s+')).join('|')+')s?\\b');
 }
 function expiryEnd(v){if(!v)return null;const[y,m,d]=v.split('-').map(Number);return d?new Date(y,m-1,d):new Date(y,m,0)}
@@ -373,7 +376,7 @@ function relDays(n){
   return n===0?'expires today':n>60?`in ${Math.round(n/30.4)} months`:`in ${plural(n,'day')}`;
 }
 function expBadge(d){
-  if(!d.expiry_date)return d.status==='current'&&needsExpiry(d.title,d.tags,d.filename)?'<span class="badge old">No expiry date</span>':'';
+  if(!d.expiry_date)return d.status==='current'&&needsExpiry(d.category,d.title,d.tags,d.filename)?'<span class="badge old">No expiry date</span>':'';
   const n=daysLeft(d.expiry_date);
   return `<span class="badge ${n<0?'exp':n<=183?'old':''}" title="${esc(relDays(n))}">${n<0?'Expired':'Expires'} ${esc(d.expiry_date)}</span>`;
 }
@@ -501,13 +504,13 @@ $('#btnUpload').onclick=()=>openDocDialog('new');
 function syncExpiry(v){
   const inp=$('#fExp');if(v===undefined)v=inp.value;
   const fn=$('#fFile').files[0]?.name||target?.filename||'';
-  const req=!(mode==='edit'&&target.status!=='current')&&needsExpiry($('#fTitle').value||fn,$('#fTags').value,fn);
+  const req=!(mode==='edit'&&target.status!=='current')&&needsExpiry($('#fCat').value,$('#fTitle').value||fn,$('#fTags').value,fn);
   const full=req||v.length===10;
   inp.type=full?'date':'month';inp.value=full?(v.length===10?v:''):v.slice(0,7);
   inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
   $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
 }
-['#fTitle','#fTags'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
+['#fTitle','#fTags','#fCat'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
 $('#fFile').addEventListener('change',()=>syncExpiry());
 $('#dlgCancel').onclick=()=>$('#dlgDoc').close();
 $('#docForm').onsubmit=async e=>{
