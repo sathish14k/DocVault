@@ -1,0 +1,9 @@
+services:
+  docvault:
+    volumes:
+      - ./app:/srv/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # Tailnet only: localhost binding, reached through Caddy at
+    # https://nd-homeserver.tail2ca440.ts.net:3450 (Caddy drops non-Tailscale clients).
+    ports: !override
+      - "127.0.0.1:8095:8000"

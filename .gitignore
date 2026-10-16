@@ -1,0 +1,5 @@
+# secrets (APP_PASSWORD)
+.env
+__pycache__/
+*.pyc
+*.bak-*

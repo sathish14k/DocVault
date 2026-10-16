@@ -1,0 +1,16 @@
+services:
+  docvault:
+    build: .
+    container_name: docvault
+    restart: unless-stopped
+    ports:
+      # LAN + Tailscale. Use "127.0.0.1:8095:8000" if you front it with
+      # `tailscale serve` or Caddy so it is only reachable through those.
+      - "8095:8000"
+    volumes:
+      - /mnt/media/docker/docvault/data:/data
+    environment:
+      - TZ=Asia/Dubai
+      - OCR_LANGS=eng+ara
+      # Optional login (HTTP basic auth, any username). Put it in a .env file next to this one.
+      - APP_PASSWORD=${APP_PASSWORD:-}

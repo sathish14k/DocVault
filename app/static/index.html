@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DocVault</title>
+<style>
+:root{--bg:#fafaf9;--card:#fff;--soft:#f3f3f1;--ink:#18181b;--ink2:#3f3f46;--mute:#71717a;--faint:#a1a1aa;--line:#e7e5e4;--line2:#d6d3d1;
+  --acc:#18181b;--acc-ink:#fff;--hi:#2563eb;--warn:#b45309;--warn-bg:#fef3c7;--ok-bg:#f4f4f5;--mark:#fde68a;--danger:#dc2626;
+  --r:12px;--shadow:0 1px 2px rgba(0,0,0,.04),0 1px 1px rgba(0,0,0,.02)}
+@media (prefers-color-scheme:dark){:root{--bg:#0c0c0e;--card:#141417;--soft:#1c1c20;--ink:#f4f4f5;--ink2:#d4d4d8;--mute:#a1a1aa;--faint:#71717a;--line:#26262b;--line2:#3a3a41;
+  --acc:#f4f4f5;--acc-ink:#0c0c0e;--hi:#60a5fa;--warn:#fbbf24;--warn-bg:#2b2110;--ok-bg:#1c1c20;--mark:#5b4a10;--danger:#f87171;--shadow:none}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 24px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+h1::before{content:"";width:18px;height:18px;border-radius:5px;background:var(--ink)}
+nav{display:flex;gap:2px}
+nav button{border:0;background:none;color:var(--mute);padding:6px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px}
+nav button:hover{color:var(--ink)}
+nav button.on{background:var(--soft);color:var(--ink);font-weight:550}
+.spacer{flex:1}
+.active-binder,.viewing{font-size:13px;color:var(--mute);display:flex;gap:6px;align-items:center}
+.active-binder select,.viewing select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 8px;font-size:13px}
+main{max-width:960px;margin:0 auto;padding:28px 24px 80px}
+input,select,textarea,button{font:inherit;color:inherit}
+input[type=text],input[type=search],input[type=date],select,textarea{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--line2);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 8%,transparent)}
+button.btn{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+button.btn:hover{border-color:var(--line2);background:var(--soft)}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:550}
+button.pri:hover{background:var(--acc);opacity:.88}
+button.sm{padding:4px 10px;font-size:13px;border-radius:8px}
+button.danger{color:var(--danger)}
+button:disabled{opacity:.5;cursor:default}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+.bar .grow{flex:1;min-width:200px}
+.bar select{width:auto}
+label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13px;white-space:nowrap;cursor:pointer}
+.search{position:relative;flex:1;min-width:0}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint);pointer-events:none}
+.search input{padding-left:38px}
+/* landing */
+.hero{margin:8px 0 26px}
+.hero h2{font-size:28px;line-height:1.2;letter-spacing:-.025em;font-weight:650;margin:0 0 6px}
+.hero .sub{color:var(--mute);font-size:14.5px}
+.hero .sub a{color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line2)}
+#library.is-home .bar{margin-bottom:34px}
+#library.is-home .search input{padding:13px 16px 13px 42px;font-size:16px;border-radius:12px;box-shadow:var(--shadow)}
+#library.is-home .search svg{left:15px}
+#library.is-home #btnUpload{padding:12px 16px;border-radius:12px}
+.home .sec{margin-bottom:34px}
+.home .sh{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
+.home .sh h3{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0}
+.home .sh .more{margin-left:auto;font-size:13px;color:var(--mute);cursor:pointer;background:none;border:0;padding:0}
+.home .sh .more:hover{color:var(--ink)}
+.people{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 5px 5px;border:1px solid var(--line);border-radius:99px;background:var(--card);cursor:pointer;font-size:14px;transition:border-color .15s,background .15s}
+.chip:hover{border-color:var(--line2)}
+.chip.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.chip.on .av{background:color-mix(in srgb,var(--acc-ink) 18%,transparent);color:var(--acc-ink)}
+.chip.on .n{color:inherit;opacity:.7}
+.chip .n{color:var(--faint);font-size:12.5px;font-variant-numeric:tabular-nums}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--ink2);font-size:12px;font-weight:600}
+.chip.add{padding:5px 13px;color:var(--mute);border-style:dashed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.cell{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:border-color .15s,background .15s;min-width:0}
+.cell:hover{border-color:var(--line2);background:var(--soft)}
+.cell .cn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell .cn{font-weight:550;font-size:14.5px}
+.cell .cc{color:var(--faint);font-size:13px;font-variant-numeric:tabular-nums}
+.cell.fill{cursor:default}.cell.fill:hover{background:var(--card)}
+.empties{margin-top:10px;font-size:13px;color:var(--faint);line-height:2}
+.empties button{background:none;border:0;padding:0 2px;color:var(--mute);cursor:pointer;font-size:13px}
+.empties button:hover{color:var(--ink);text-decoration:underline}
+.rows{border:1px solid var(--line);border-radius:var(--r);background:var(--card);overflow:hidden}
+.rw{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line);cursor:pointer;transition:background .15s}
+.rw:first-child{border-top:0}
+.rw:hover{background:var(--soft)}
+.rw .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.rw .m{color:var(--faint);font-size:13px;white-space:nowrap}
+.rw .ic{width:30px;height:30px;border-radius:8px;background:var(--soft);display:grid;place-items:center;color:var(--mute);font-size:10px;font-weight:650;letter-spacing:.02em;flex:none}
+.hint{color:var(--mute);font-size:14px;padding:18px;border:1px dashed var(--line2);border-radius:var(--r);text-align:center}
+.hint a{color:var(--ink);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:600px){header{padding:10px 16px;gap:8px 12px}main{padding:20px 16px 60px}.hero h2{font-size:24px}.rw .m.opt{display:none}nav{order:3;width:100%;overflow-x:auto}.spacer{display:none}.viewing,.active-binder{flex:1;min-width:0}.viewing select,.active-binder select{min-width:0;flex:1}.search{flex-basis:100%}#library.is-home .bar{margin-bottom:26px}#btnUpload{margin-left:auto}.grid{grid-template-columns:1fr 1fr}.chip{max-width:100%}.chip .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+html,body{overflow-x:hidden}
+/* documents */
+.doc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;transition:border-color .15s}
+.doc:hover{border-color:var(--line2)}
+.doc.superseded{opacity:.7;border-style:dashed}
+.doc .main{flex:1;min-width:240px}
+.title{font-weight:550;color:var(--ink);cursor:pointer;text-decoration:none}
+.title:hover{text-decoration:underline;text-underline-offset:3px}
+.badge{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:99px;background:var(--soft);color:var(--ink2);margin-left:6px;vertical-align:1px;font-weight:500}
+.badge.old{background:var(--warn-bg);color:var(--warn)}
+.badge.who{background:none;border:1px solid var(--line);color:var(--mute)}
+.meta{color:var(--mute);font-size:13px;margin-top:2px}
+.snip{font-size:13px;margin-top:6px;color:var(--mute)}
+mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 2px}
+.actions{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.empty{color:var(--mute);text-align:center;padding:48px 0}
+section{display:none}section.on{display:block}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:22px;width:min(560px,94vw);box-shadow:0 20px 50px rgba(0,0,0,.18)}
+dialog h3{font-size:18px;letter-spacing:-.01em}
+dialog::backdrop{background:rgba(10,10,12,.4);backdrop-filter:blur(2px)}
+dialog.big{width:min(1100px,96vw);height:92vh;padding:12px;display:none;flex-direction:column}
+dialog.big[open]{display:flex}
+dialog.big iframe{flex:1;border:1px solid var(--line);border-radius:10px;background:#fff;width:100%}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.f{margin-bottom:12px}.f>span{display:block;font-size:12.5px;color:var(--mute);margin-bottom:4px}
+.note{background:var(--warn-bg);color:var(--warn);padding:9px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
+.split{display:grid;grid-template-columns:240px 1fr;gap:16px}
+@media(max-width:720px){.split{grid-template-columns:1fr}}
+.list .item{padding:10px 12px;border:1px solid var(--line);background:var(--card);border-radius:10px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.list .item.on{border-color:var(--ink);background:var(--soft)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.bi{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.bi:last-child{border:0}.bi .n{width:26px;color:var(--mute)}.bi .t{flex:1}
+.catrow{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.catrow:last-child{border:0}
+.catrow .t{flex:1}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:50}
+#toast.on{opacity:1}
+a.dl{color:var(--hi)}
+.crumb{display:flex;gap:8px;align-items:center;margin:0 0 14px;font-size:14px}
+.crumb a{color:var(--mute);cursor:pointer}
+.crumb a:hover{color:var(--ink)}
+.crumb strong{font-size:20px;letter-spacing:-.015em;font-weight:650}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="brand" title="Home">DocVault</h1>
+  <nav>
+    <button data-v="library" class="on">Library</button>
+    <button data-v="binders">Binders</button>
+    <button data-v="family">Family</button>
+    <button data-v="categories">Categories</button>
+  </nav>
+  <div class="spacer"></div>
+  <label class="viewing">Showing
+    <select id="memberSel"></select>
+  </label>
+  <div class="active-binder">Binder
+    <select id="activeBinder"></select>
+  </div>
+</header>
+
+<main>
+<section id="library" class="on">
+  <div id="hero" class="hero" hidden></div>
+  <div class="bar">
+    <div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Search names, titles, tags and document text…" autofocus></div>
+    <label class="chk"><input type="checkbox" id="showOld"> Show superseded</label>
+    <button class="btn pri" id="btnUpload">+ Upload</button>
+  </div>
+  <div id="crumb" class="crumb" hidden></div>
+  <div id="home" class="home"></div>
+  <div id="docs"></div>
+</section>
+
+<section id="binders">
+  <div class="split">
+    <div>
+      <button class="btn pri" id="btnNewBinder" style="width:100%;margin-bottom:10px">+ New binder</button>
+      <div class="list" id="binderList"></div>
+    </div>
+    <div class="panel" id="binderDetail"><div class="empty">Select or create a binder.<br>Add documents from the Library with “+ Binder”.</div></div>
+  </div>
+  <h3 style="margin-top:26px">Recent exports</h3>
+  <div id="exports" class="panel"></div>
+</section>
+
+<section id="family">
+  <div class="panel">
+    <div class="bar" style="margin-bottom:6px">
+      <input id="newMem" class="grow" type="text" placeholder="Name (e.g. Sathish)">
+      <input id="newRel" type="text" placeholder="Relation (optional, e.g. Spouse)" style="width:220px">
+      <button class="btn pri" id="btnAddMem">Add person</button>
+    </div>
+    <div class="meta" style="margin:4px 0 6px">Every document belongs to one person, or to <strong>Shared</strong> for household papers (tenancy, utility bills, family insurance).</div>
+    <div id="memList"></div>
+  </div>
+</section>
+
+<section id="categories">
+  <div class="panel">
+    <div class="bar" style="margin-bottom:6px">
+      <input id="newCat" class="grow" type="text" placeholder="New category name">
+      <button class="btn pri" id="btnAddCat">Add category</button>
+    </div>
+    <div id="catList"></div>
+  </div>
+</section>
+</main>
+
+<datalist id="catData"></datalist>
+
+<dialog id="dlgDoc">
+  <form id="docForm" method="dialog">
+    <h3 id="dlgTitle" style="margin-top:0">Upload document</h3>
+    <div id="dlgNote" class="note" hidden></div>
+    <div class="f" id="fileRow"><span>File (PDF, Word, Excel, image, text…)</span><input type="file" id="fFile"></div>
+    <div class="f"><span>Title</span><input type="text" id="fTitle" placeholder="Defaults to file name"></div>
+    <div class="row">
+      <div class="f"><span>Belongs to</span><select id="fMember"></select></div>
+      <div class="f"><span>Category (type a new one to create it)</span><input type="text" id="fCat" list="catData"></div>
+    </div>
+    <div class="f"><span>Document date</span><input type="date" id="fDate"></div>
+    <div class="f"><span>Tags (comma separated)</span><input type="text" id="fTags"></div>
+    <div class="f"><span>Notes</span><textarea id="fNotes" rows="2"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn" id="dlgCancel">Cancel</button>
+      <button type="submit" class="btn pri" id="dlgSave">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgView" class="big">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+    <strong id="vTitle" style="flex:1"></strong>
+    <a id="vOpen" class="dl" target="_blank">Open in tab</a>
+    <a id="vDown" class="dl">Download</a>
+    <button class="btn sm" id="vClose">Close</button>
+  </div>
+  <iframe id="vFrame"></iframe>
+</dialog>
+
+<dialog id="dlgHist">
+  <h3 style="margin-top:0">Version history</h3>
+  <div id="histBody"></div>
+  <div style="text-align:right;margin-top:10px"><button class="btn" id="histClose">Close</button></div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtSize=n=>n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+async function api(url,opts={}){
+  const r=await fetch(url,opts);
+  if(!r.ok){let b={};try{b=await r.json()}catch{}
+    throw Object.assign(new Error(b.detail||r.statusText),{status:r.status,body:b})}
+  return r.json();
+}
+const jreq=(method,body)=>({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600)}
+
+let cats=[],binders=[],members=[],docsById={};
+const SHARED='__shared__';
+let curMember='';try{curMember=localStorage.getItem('member')||''}catch{}
+const whoLabel=m=>m===SHARED?'Shared':m;
+let active=+localStorage.getItem('activeBinder')||0, openBinder=0;
+
+/* ---------- navigation ---------- */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>b.dataset.v==='library'?goHome():show(b.dataset.v));
+$('#brand').onclick=goHome;
+/* Library tab and logo always return to the landing page with every filter reset. */
+function goHome(){
+  $('#q').value='';$('#showOld').checked=false;setMember('',false);
+  if(location.hash&&location.hash!=='#'){history.pushState(null,'',location.pathname);curCat=null}
+  show('library');window.scrollTo(0,0);
+}
+function show(v){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('on',s.id===v));
+  if(v==='binders'){loadBinders().then(()=>{renderBinderList();if(openBinder)showBinder(openBinder);loadExports()})}
+  if(v==='categories')loadCats();
+  if(v==='family')loadMembers();
+  if(v==='library')Promise.all([loadMembers(),loadCats(),loadBinders()]).then(refreshLibrary);
+}
+
+/* ---------- categories ---------- */
+async function loadCats(){
+  cats=await api('/api/categories?'+new URLSearchParams({member:curMember}));
+  $('#catData').innerHTML=cats.map(c=>`<option value="${esc(c.name)}">`).join('');
+  $('#catList').innerHTML=cats.map(c=>`<div class="catrow"><span class="t">${esc(c.name)} <span class="badge">${c.count}</span></span>
+    <button class="btn sm" data-ren="${c.id}">Rename</button><button class="btn sm danger" data-delcat="${c.id}">Delete</button></div>`).join('');
+}
+$('#btnAddCat').onclick=async()=>{const n=$('#newCat').value.trim();if(!n)return;
+  try{await api('/api/categories',jreq('POST',{name:n}));$('#newCat').value='';await loadCats();refreshLibrary();toast('Category added')}catch(e){toast(e.message)}};
+$('#catList').onclick=async e=>{
+  const ren=e.target.dataset.ren,del=e.target.dataset.delcat;
+  if(ren){const c=cats.find(x=>x.id==ren);const n=prompt('Rename category',c.name);
+    if(n&&n.trim()){try{await api('/api/categories/'+ren,jreq('PUT',{name:n}));await loadCats();if(curCat===c.name)openCat(n.trim());else refreshLibrary()}catch(er){toast(er.message)}}}
+  if(del&&confirm('Delete this category?')){try{await api('/api/categories/'+del,{method:'DELETE'});await loadCats();refreshLibrary()}catch(er){toast(er.message)}}
+};
+
+/* ---------- family members ---------- */
+async function loadMembers(){
+  members=await api('/api/members');
+  if(curMember&&curMember!==SHARED&&!members.some(m=>m.name===curMember))setMember('',false);
+  $('#memberSel').innerHTML='<option value="">Whole family</option>'+members.map(m=>`<option value="${esc(m.name)}">${esc(m.name)}</option>`).join('')+
+    `<option value="${SHARED}">Shared only</option>`;
+  $('#memberSel').value=curMember;
+  $('#fMember').innerHTML='<option value="">— choose person —</option>'+members.map(m=>`<option value="${esc(m.name)}">${esc(m.name)}${m.relation?' ('+esc(m.relation)+')':''}</option>`).join('')+
+    `<option value="${SHARED}">Shared / whole family</option>`;
+  $('#memList').innerHTML=members.length?members.map(m=>`<div class="catrow"><span class="t"><a class="title" data-pick="${esc(m.name)}">${esc(m.name)}</a>${m.relation?` <span class="meta">${esc(m.relation)}</span>`:''} <span class="badge">${m.count}</span></span>
+    <button class="btn sm" data-edmem="${m.id}">Edit</button><button class="btn sm danger" data-delmem="${m.id}">Delete</button></div>`).join('')
+    :'<div class="empty">No family members yet. Add each person above.</div>';
+}
+function setMember(m,refresh=true){
+  curMember=m;try{localStorage.setItem('member',m)}catch{}
+  $('#memberSel').value=m;
+  if(refresh)loadCats().then(refreshLibrary);
+}
+$('#memberSel').onchange=e=>setMember(e.target.value);
+$('#btnAddMem').onclick=async()=>{const n=$('#newMem').value.trim();if(!n)return;
+  try{await api('/api/members',jreq('POST',{name:n,relation:$('#newRel').value}));$('#newMem').value='';$('#newRel').value='';await loadMembers();toast('Added '+n)}catch(e){toast(e.message)}};
+$('#memList').onclick=async e=>{
+  const t=e.target,ed=t.dataset.edmem,del=t.dataset.delmem;
+  if(t.dataset.pick!==undefined){setMember(t.dataset.pick,false);location.hash='';return show('library')}
+  if(ed){const m=members.find(x=>x.id==ed);const n=prompt('Name',m.name);if(!n||!n.trim())return;
+    const rel=prompt('Relation (optional)',m.relation||'');
+    try{await api('/api/members/'+ed,jreq('PUT',{name:n,relation:rel??m.relation}));if(curMember===m.name)setMember(n.trim(),false);await loadMembers()}catch(er){toast(er.message)}}
+  if(del&&confirm('Remove this person?')){try{await api('/api/members/'+del,{method:'DELETE'});await loadMembers()}catch(er){toast(er.message)}}
+};
+
+/* ---------- library ---------- */
+/* Home shows categories and binders as tiles; documents are listed only inside a
+   category (#cat=<name>) or for a search. */
+const NO_CAT='__none__';
+let curCat=null;
+const catLabel=c=>c===NO_CAT?'Uncategorised':c;
+function catFromHash(){const m=location.hash.match(/^#cat=(.*)$/);return m?decodeURIComponent(m[1]):null}
+function openCat(c){location.hash=c==null?'':'cat='+encodeURIComponent(c)}
+window.onhashchange=()=>{curCat=catFromHash();show('library')};
+let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(refreshLibrary,250)};
+$('#showOld').onchange=refreshLibrary;
+async function refreshLibrary(){
+  const q=$('#q').value.trim();
+  if(curCat==null&&!q)return renderHome();
+  $('#home').innerHTML='';setHomeMode(false);
+  const crumb=$('#crumb');crumb.hidden=false;
+  crumb.innerHTML=`<a data-home>← Library</a><span class="meta">/</span><strong>${curCat==null?'Search results':esc(catLabel(curCat))}</strong>`+
+    (curMember?`<span class="badge who">${esc(whoLabel(curMember))}</span>`:'')+
+    (curCat!=null&&q?'<span class="meta">· matching search</span>':'');
+  const p=new URLSearchParams({q,category:curCat??'',member:curMember,include_superseded:$('#showOld').checked});
+  const docs=await api('/api/documents?'+p);
+  docsById={};docs.forEach(d=>docsById[d.id]=d);
+  $('#docs').innerHTML=docs.length?docs.map(docHtml).join(''):`<div class="empty">${q?'No documents found.':'No documents in this category yet'+(curMember?' for '+esc(whoLabel(curMember)):'')+'.'}</div>`;
+}
+const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
+const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+const extOf=f=>((f||'').split('.').pop()||'').slice(0,4).toUpperCase();
+function setHomeMode(on){$('#library').classList.toggle('is-home',on);$('#hero').hidden=!on}
+async function renderHome(){
+  $('#crumb').hidden=true;$('#docs').innerHTML='';setHomeMode(true);
+  const [sum,all,recent]=await Promise.all([
+    api('/api/summary?'+new URLSearchParams({member:curMember})),
+    curMember?api('/api/summary'):null,
+    api('/api/documents?'+new URLSearchParams({member:curMember,limit:6}))]);
+  const tot=all||sum;
+  recent.forEach(d=>docsById[d.id]=d);
+  const who=curMember?(curMember===SHARED?'Shared documents':curMember):'Family documents';
+  const rel=members.find(m=>m.name===curMember)?.relation;
+  $('#hero').innerHTML=`<h2>${esc(who)}</h2><div class="sub">${plural(sum.total,'document')}`+
+    (curMember?(rel?' · '+esc(rel):'')+' · <a data-who="">Whole family</a>'
+      :` · ${plural(members.length,'person')}`.replace('persons','people')+(binders.length?` · ${plural(binders.length,'binder')}`:''))+'</div>';
+  let h='';
+  // people
+  const chip=(v,label,n,av)=>`<button class="chip${curMember===v?' on':''}" data-who="${esc(v)}"><span class="av">${av}</span><span class="lbl">${esc(label)}</span> <span class="n">${n}</span></button>`;
+  h+='<div class="sec"><div class="sh"><h3>People</h3><button class="more" data-go="family">Manage</button></div>'+
+    (members.length?'<div class="people">'+chip('','Everyone',tot.total,'∗')+
+      members.map(m=>chip(m.name,m.name,m.count,esc(initials(m.name)))).join('')+
+      chip(SHARED,'Shared',tot.shared,'⌂')+'</div>'
+      :'<div class="hint">Add the people in your family so each document can be filed under someone. <a data-go="family">Add people</a></div>')+'</div>';
+  // categories
+  const full=cats.filter(c=>c.count),empty=cats.filter(c=>!c.count);
+  const cell=(c,n)=>`<button class="cell" data-cat="${esc(c)}"><span class="cn">${esc(catLabel(c))}</span><span class="cc">${n}</span></button>`;
+  h+='<div class="sec"><div class="sh"><h3>Categories</h3></div>'+
+    (full.length||sum.uncategorised?'<div class="grid">'+full.map(c=>cell(c.name,c.count)).join('')+(sum.uncategorised?cell(NO_CAT,sum.uncategorised):'')+'</div>'
+      :'<div class="hint">Nothing filed here yet. Use <strong>+ Upload</strong> to add the first document.</div>')+
+    (empty.length?'<div class="empties">Empty: '+empty.map(c=>`<button data-cat="${esc(c.name)}">${esc(c.name)}</button>`).join(' · ')+'</div>':'')+'</div>';
+  // recent
+  if(recent.length)h+='<div class="sec"><div class="sh"><h3>Recently added</h3></div><div class="rows">'+recent.map(d=>
+    `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
+    (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
+    `<span class="m opt">${esc(d.category||'Uncategorised')}</span><span class="m opt">${esc((d.doc_date||d.created_at).slice(0,10))}</span></div>`).join('')+'</div></div>';
+  // binders
+  h+='<div class="sec"><div class="sh"><h3>Binders</h3><button class="more" data-go="binders">All binders</button></div>'+
+    (binders.length?'<div class="rows">'+binders.slice(0,5).map(b=>
+      `<div class="rw" data-binder="${b.id}"><span class="t">${esc(b.name)}</span><span class="m">${plural(b.count,'document')}</span></div>`).join('')+'</div>'
+      :'<div class="empties">No binders yet. Use “+ Binder” on any document to start one for a visa, school or bank application.</div>')+'</div>';
+  $('#home').innerHTML=h;
+}
+$('#hero').onclick=e=>{const w=e.target.closest('[data-who]');if(w)setMember(w.dataset.who)};
+$('#home').onclick=e=>{
+  const w=e.target.closest('[data-who]');if(w)return setMember(w.dataset.who);
+  const g=e.target.closest('[data-go]');if(g)return show(g.dataset.go);
+  const d=e.target.closest('[data-doc]');if(d)return viewDoc(docsById[d.dataset.doc]);
+  const c=e.target.closest('[data-cat]');if(c)return openCat(c.dataset.cat);
+  const b=e.target.closest('[data-binder]');if(b){openBinder=+b.dataset.binder;show('binders')}
+};
+$('#crumb').onclick=e=>{if(e.target.closest('[data-home]')){$('#q').value='';curCat==null?refreshLibrary():openCat(null)}};
+function snip(s){return esc(s).replace(/\x01/g,'<mark>').replace(/\x02/g,'</mark>')}
+function docHtml(d){
+  const old=d.status!=='current';
+  return `<div class="doc ${old?'superseded':''}"><div class="main">
+    <a class="title" data-act="view" data-id="${d.id}">${esc(d.title)}</a>
+    ${d.version>1||old?`<span class="badge ${old?'old':''}">${old?'superseded · ':''}v${d.version}</span>`:''}
+    <span class="badge who">${esc(d.member||'Shared')}</span>
+    ${d.category?`<span class="badge">${esc(d.category)}</span>`:''}
+    <div class="meta">${esc(d.filename)} · ${fmtSize(d.size)}${d.doc_date?' · '+esc(d.doc_date):''}${d.tags?' · '+esc(d.tags):''}</div>
+    ${d.notes?`<div class="meta">${esc(d.notes)}</div>`:''}
+    ${d.snippet?`<div class="snip">${snip(d.snippet)}</div>`:''}
+  </div><div class="actions">
+    <button class="btn sm pri" data-act="bind" data-id="${d.id}">+ Binder</button>
+    <button class="btn sm" data-act="view" data-id="${d.id}">View</button>
+    ${old?'':`<button class="btn sm" data-act="replace" data-id="${d.id}">New version</button>`}
+    ${d.version>1||old?`<button class="btn sm" data-act="hist" data-id="${d.id}">History</button>`:''}
+    <button class="btn sm" data-act="edit" data-id="${d.id}">Edit</button>
+    <button class="btn sm danger" data-act="del" data-id="${d.id}">Delete</button>
+  </div></div>`;
+}
+$('#docs').onclick=async e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const id=+b.dataset.id,d=docsById[id];
+  switch(b.dataset.act){
+    case'view':return viewDoc(d);
+    case'bind':return addToBinder(id);
+    case'replace':return openDocDialog('replace',d);
+    case'edit':return openDocDialog('edit',d);
+    case'hist':return showHistory(id);
+    case'del':
+      if(confirm(`Permanently delete “${d.title}”?\n\nSuperseding keeps old versions; delete removes this file for good.`)){
+        await api('/api/documents/'+id,{method:'DELETE'});toast('Deleted');await loadMembers();await loadCats();refreshLibrary()}
+  }
+};
+
+/* ---------- upload / replace / edit ---------- */
+let mode='new',target=null,forceNext=false;
+function openDocDialog(m,d){
+  mode=m;target=d;forceNext=false;$('#docForm').reset();
+  $('#dlgTitle').textContent=m==='new'?'Upload document':m==='replace'?'Upload new version':'Edit details';
+  $('#fileRow').hidden=m==='edit';
+  const note=$('#dlgNote');
+  if(m==='replace'){note.hidden=false;note.textContent=`This replaces “${d.title}” as the current version. The old file is kept in history.`}
+  else note.hidden=true;
+  $('#fMember').value=d?(d.member||SHARED):curMember;
+  if(d){$('#fTitle').value=d.title;$('#fCat').value=d.category||'';$('#fDate').value=d.doc_date||'';$('#fTags').value=d.tags||'';$('#fNotes').value=m==='edit'?d.notes||'':''}
+  if(m==='new'&&curCat&&curCat!==NO_CAT)$('#fCat').value=curCat;
+  $('#dlgDoc').showModal();
+}
+$('#btnUpload').onclick=()=>openDocDialog('new');
+$('#dlgCancel').onclick=()=>$('#dlgDoc').close();
+$('#docForm').onsubmit=async e=>{
+  e.preventDefault();const btn=$('#dlgSave');
+  const who=$('#fMember').value;
+  if(!who&&members.length){toast('Choose who this document belongs to');return}
+  const member=who===SHARED?'':who;
+  try{
+    btn.disabled=true;btn.textContent='Saving…';
+    if(mode==='edit'){
+      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
+    }else{
+      const f=$('#fFile').files[0];if(!f){toast('Choose a file');return}
+      const fd=new FormData();fd.append('file',f);
+      fd.append('title',mode==='replace'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
+      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);
+      fd.append('tags',$('#fTags').value);fd.append('notes',$('#fNotes').value);
+      if(mode==='replace')fd.append('supersedes_id',target.id);
+      if(forceNext)fd.append('force','true');
+      try{const r=await api('/api/documents',{method:'POST',body:fd});
+        if(r.converted_from)toast(`Converted ${r.converted_from} to JPG`)}
+      catch(er){
+        if(er.status===409&&er.body.duplicate&&confirm(`${er.message}: “${er.body.duplicate.title}”.\n\nUpload anyway?`)){
+          forceNext=true;btn.disabled=false;btn.textContent='Save';return $('#docForm').requestSubmit()}
+        throw er}
+    }
+    $('#dlgDoc').close();if(mode==='edit'||!$('#toast').classList.contains('on'))toast('Saved');await loadMembers();await loadCats();refreshLibrary();
+  }catch(er){toast(er.message)}finally{btn.disabled=false;btn.textContent='Save'}
+};
+
+/* ---------- reader ---------- */
+function viewDoc(d){
+  $('#vTitle').textContent=d.title;
+  $('#vFrame').src='/api/documents/'+d.id+'/preview';
+  $('#vOpen').href='/api/documents/'+d.id+'/preview';
+  $('#vDown').href='/api/documents/'+d.id+'/file?download=true';
+  $('#dlgView').showModal();
+}
+$('#vClose').onclick=()=>{$('#dlgView').close();$('#vFrame').src='about:blank'};
+
+/* ---------- history ---------- */
+async function showHistory(id){
+  const h=await api(`/api/documents/${id}/history`);
+  $('#histBody').innerHTML=h.slice().reverse().map(d=>`<div class="bi"><span class="t"><strong>v${d.version}</strong> ${d.status==='current'?'<span class="badge">current</span>':'<span class="badge old">superseded</span>'}
+    <div class="meta">${esc(d.filename)} · ${esc(d.created_at.replace('T',' '))}${d.doc_date?' · dated '+esc(d.doc_date):''}</div></span>
+    <button class="btn sm" data-hv="${d.id}">View</button><button class="btn sm" data-hb="${d.id}">+ Binder</button></div>`).join('');
+  h.forEach(d=>docsById[d.id]=docsById[d.id]||d);
+  $('#dlgHist').showModal();
+}
+$('#histBody').onclick=e=>{
+  if(e.target.dataset.hv)viewDoc(docsById[e.target.dataset.hv]);
+  if(e.target.dataset.hb)addToBinder(+e.target.dataset.hb);
+};
+$('#histClose').onclick=()=>$('#dlgHist').close();
+
+/* ---------- binders ---------- */
+async function loadBinders(){
+  binders=await api('/api/collections');
+  $('#activeBinder').innerHTML='<option value="0">— choose —</option>'+binders.map(b=>`<option value="${b.id}">${esc(b.name)} (${b.count})</option>`).join('');
+  if(!binders.some(b=>b.id===active))active=0;
+  $('#activeBinder').value=active;
+}
+$('#activeBinder').onchange=e=>{active=+e.target.value;localStorage.setItem('activeBinder',active)};
+async function createBinder(){
+  const n=prompt('Binder name (e.g. “Visa renewal 2026”)');if(!n||!n.trim())return 0;
+  const r=await api('/api/collections',jreq('POST',{name:n}));await loadBinders();return r.id;
+}
+async function addToBinder(docId){
+  if(!active){active=await createBinder();if(!active)return;localStorage.setItem('activeBinder',active);$('#activeBinder').value=active}
+  await api(`/api/collections/${active}/items`,jreq('POST',{document_id:docId}));
+  await loadBinders();toast('Added to “'+binders.find(b=>b.id===active).name+'”');
+}
+$('#btnNewBinder').onclick=async()=>{const id=await createBinder();if(id){openBinder=id;renderBinderList();showBinder(id)}};
+function renderBinderList(){
+  $('#binderList').innerHTML=binders.length?binders.map(b=>`<div class="item ${b.id===openBinder?'on':''}" data-b="${b.id}"><span>${esc(b.name)}</span><span class="badge">${b.count}</span></div>`).join(''):'<div class="empty">No binders yet.</div>';
+}
+$('#binderList').onclick=e=>{const it=e.target.closest('[data-b]');if(it){openBinder=+it.dataset.b;renderBinderList();showBinder(openBinder)}};
+async function showBinder(id){
+  let b;try{b=await api('/api/collections/'+id)}catch{openBinder=0;return}
+  const p=$('#binderDetail');
+  p.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">${esc(b.name)}</h3>
+    <button class="btn sm" id="bRen">Rename</button><button class="btn sm danger" id="bDel">Delete binder</button></div>
+    <div class="meta" style="margin:4px 0 10px">${b.items.length} document(s). Add more from the Library with “+ Binder”. Use ↑ ↓ to set the print order.</div>
+    <div id="bItems">${b.items.length?b.items.map((d,i)=>`<div class="bi"><span class="n">${i+1}.</span>
+      <span class="t">${esc(d.title)} <span class="meta">${esc(d.member||'Shared')} · ${esc(d.category||'')} · ${esc(d.filename)}${d.status!=='current'?' · superseded v'+d.version:''}</span></span>
+      <button class="btn sm" data-up="${i}">↑</button><button class="btn sm" data-dn="${i}">↓</button>
+      <button class="btn sm" data-view="${d.id}">View</button><button class="btn sm danger" data-rm="${d.id}">✕</button></div>`).join(''):'<div class="empty">Empty binder.</div>'}</div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn pri" data-exp="pdf" ${b.items.length?'':'disabled'}>Export combined PDF</button>
+      <button class="btn pri" data-exp="folder" ${b.items.length?'':'disabled'}>Export folder + zip</button></div>
+    <div id="expResult" class="meta" style="margin-top:10px"></div>`;
+  b.items.forEach(d=>docsById[d.id]=d);
+  const ids=b.items.map(d=>d.id);
+  p.onclick=async e=>{
+    const t=e.target;
+    const move=async(i,j)=>{if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];
+      await api(`/api/collections/${id}/reorder`,jreq('POST',{order:ids}));showBinder(id)};
+    if(t.dataset.up!==undefined)return move(+t.dataset.up,+t.dataset.up-1);
+    if(t.dataset.dn!==undefined)return move(+t.dataset.dn,+t.dataset.dn+1);
+    if(t.dataset.rm){await api(`/api/collections/${id}/items/${t.dataset.rm}`,{method:'DELETE'});await loadBinders();renderBinderList();return showBinder(id)}
+    if(t.dataset.view)return viewDoc(docsById[t.dataset.view]);
+    if(t.id==='bRen'){const n=prompt('Rename binder',b.name);if(n&&n.trim()){await api('/api/collections/'+id,jreq('PUT',{name:n,notes:b.notes}));await loadBinders();renderBinderList();showBinder(id)}}
+    if(t.id==='bDel'&&confirm('Delete this binder? (Documents themselves are not deleted.)')){
+      await api('/api/collections/'+id,{method:'DELETE'});openBinder=0;await loadBinders();renderBinderList();
+      p.innerHTML='<div class="empty">Binder deleted.</div>'}
+    if(t.dataset.exp){
+      t.disabled=true;const old=t.textContent;t.textContent='Building…';
+      try{const r=await api(`/api/collections/${id}/export`,jreq('POST',{mode:t.dataset.exp}));
+        $('#expResult').innerHTML=r.files.map(f=>`<a class="dl" href="${f.url}">Download ${esc(f.name)}</a>`).join(' · ')+
+          `<br>Also saved on the server in <code>${esc(r.saved_in)}</code> under the app data folder.`+
+          (r.skipped.length?`<br><span style="color:var(--warn)">Skipped (could not convert to PDF): ${r.skipped.map(esc).join(', ')}</span>`:'');
+        loadExports();
+      }catch(er){toast(er.message)}finally{t.disabled=false;t.textContent=old}
+    }
+  };
+}
+async function loadExports(){
+  const ex=await api('/api/exports');
+  $('#exports').innerHTML=ex.length?ex.map(f=>`<div class="bi"><span class="t"><a class="dl" href="${f.url}">${esc(f.name)}</a></span><span class="meta">${fmtSize(f.size)}</span></div>`).join(''):'<span class="meta">Nothing exported yet.</span>';
+}
+
+/* ---------- init ---------- */
+(async()=>{curCat=catFromHash();await loadMembers();await loadCats();await loadBinders();refreshLibrary()})();
+</script>
+</body>
+</html>
