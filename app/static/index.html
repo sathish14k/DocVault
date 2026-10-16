@@ -74,6 +74,8 @@ label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13
 .cell.due .big{color:var(--warn)}.cell.over .big{color:var(--danger)}
 .eg{padding:7px 16px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);background:var(--soft);border-top:1px solid var(--line)}
 .eg:first-child{border-top:0}
+.rw .lnk{background:none;border:0;padding:2px 4px;font-size:13px;color:var(--hi);cursor:pointer;white-space:nowrap}
+.rw .lnk:hover{text-decoration:underline;text-underline-offset:3px}
 .rw .ack{display:flex;gap:5px;align-items:center;font-size:12.5px;color:var(--mute);white-space:nowrap;cursor:pointer}
 .rw .m.due{color:var(--warn)}.rw .m.over{color:var(--danger)}
 .empties{margin-top:10px;font-size:13px;color:var(--faint);line-height:2}
@@ -393,6 +395,7 @@ function renderExpiring(ex){
     `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
     (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
     `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span>`+
+    `<button class="lnk" data-fix="${d.id}" title="Edit details or expiry date">Edit</button>`+
     (k==='expired'&&canAck(d.category)?`<label class="ack" title="Hide from the Expired list"><input type="checkbox" data-ack="${d.id}"> Acknowledge</label>`:'')+
     '</div>').join('')).join('');
   h+=rows?`<div class="rows" style="margin-top:10px">${rows}</div>`:'<div class="empties">Nothing expires in the next 6 months.</div>';
