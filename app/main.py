@@ -37,7 +37,8 @@ SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no
 
 # Documents whose title, tags or file name mention one of these must carry a full expiry date
 # (day, month, year). Any other document may carry an optional month/year expiry.
-EXPIRY_REQUIRED = ["passport", "lease", "service contract", "rental contract", "tenancy contract"]
+# "pp" is the passport abbreviation used in file names such as KP_PP_New_2024.pdf.
+EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract"]
 _EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
 
 DEFAULT_CATEGORIES = [
@@ -900,4 +901,5 @@ def health():
 
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    # no-cache: browsers revalidate (cheap, via ETag) so an updated page is never served stale
+    return FileResponse(Path(__file__).parent / "static" / "index.html", headers={"Cache-Control": "no-cache"})
