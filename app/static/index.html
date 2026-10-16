@@ -269,6 +269,9 @@ $('#brand').onclick=goHome;
 /* Library tab and logo always return to the landing page with every filter reset. */
 function goHome(){
   $('#q').value='';$('#showOld').checked=false;setMember('',false);
+  // Clear the filtered view now and drop any search/category response still in flight,
+  // so a slow connection never shows the old results after the reset.
+  clearTimeout(qT);libSeq++;$('#crumb').hidden=true;$('#docs').innerHTML='';
   if(location.hash&&location.hash!=='#'){history.pushState(null,'',location.pathname);curCat=null}
   show('library');window.scrollTo(0,0);
 }
@@ -336,11 +339,12 @@ const catLabel=c=>c===NO_CAT?'Uncategorised':c;
 function catFromHash(){const m=location.hash.match(/^#cat=(.*)$/);return m?decodeURIComponent(m[1]):null}
 function openCat(c){location.hash=c==null?'':'cat='+encodeURIComponent(c)}
 window.onhashchange=()=>{curCat=catFromHash();show('library')};
-let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(refreshLibrary,250)};
+let qT,libSeq=0;  // libSeq: only the newest library render may write to the page
+$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(refreshLibrary,250)};
 $('#showOld').onchange=refreshLibrary;
 async function refreshLibrary(){
-  const q=$('#q').value.trim();
-  if(curCat==null&&!q)return renderHome();
+  const seq=++libSeq,q=$('#q').value.trim();
+  if(curCat==null&&!q)return renderHome(seq);
   $('#home').innerHTML='';setHomeMode(false);
   const crumb=$('#crumb');crumb.hidden=false;
   crumb.innerHTML=`<a data-home>← Library</a><span class="meta">/</span><strong>${curCat==null?'Search results':esc(catLabel(curCat))}</strong>`+
@@ -348,6 +352,7 @@ async function refreshLibrary(){
     (curCat!=null&&q?'<span class="meta">· matching search</span>':'');
   const p=new URLSearchParams({q,category:curCat??'',member:curMember,include_superseded:$('#showOld').checked});
   const docs=await api('/api/documents?'+p);
+  if(seq!==libSeq)return;
   docsById={};docs.forEach(d=>docsById[d.id]=d);
   $('#docs').innerHTML=docs.length?docs.map(docHtml).join(''):`<div class="empty">${q?'No documents found.':'No documents in this category yet'+(curMember?' for '+esc(whoLabel(curMember)):'')+'.'}</div>`;
 }
@@ -390,13 +395,14 @@ function renderExpiring(ex){
 }
 const extOf=f=>((f||'').split('.').pop()||'').slice(0,4).toUpperCase();
 function setHomeMode(on){$('#library').classList.toggle('is-home',on);$('#hero').hidden=!on}
-async function renderHome(){
+async function renderHome(seq){
   $('#crumb').hidden=true;$('#docs').innerHTML='';setHomeMode(true);
   const [sum,all,recent,ex]=await Promise.all([
     api('/api/summary?'+new URLSearchParams({member:curMember})),
     curMember?api('/api/summary'):null,
     api('/api/documents?'+new URLSearchParams({member:curMember,limit:6})),
     api('/api/expiring?'+new URLSearchParams({member:curMember}))]);
+  if(seq!==libSeq)return;
   const tot=all||sum;
   [recent,...Object.values(ex)].flat().forEach(d=>docsById[d.id]=d);
   const who=curMember?(curMember===SHARED?'Shared documents':curMember):'Family documents';
