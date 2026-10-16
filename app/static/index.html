@@ -378,12 +378,10 @@ function expBadge(d){
   return `<span class="badge ${n<0?'exp':n<=183?'old':''}" title="${esc(relDays(n))}">${n<0?'Expired':'Expires'} ${esc(d.expiry_date)}</span>`;
 }
 function renderExpiring(ex){
-  const n1=ex.month1.length,n3=n1+ex.month3.length,n6=n3+ex.month6.length;
-  const tile=(label,n,cls)=>`<div class="cell fill ${n?cls:''}"><span class="cc">${label}</span><span class="big">${n}</span></div>`;
-  let h='<div class="sec"><div class="sh"><h3>Expiring soon</h3></div><div class="grid">'+
-    (ex.expired.length?tile('Already expired',ex.expired.length,'over'):'')+
-    tile('Next 1 month',n1,'over')+tile('Next 3 months',n3,'due')+tile('Next 6 months',n6,'')+'</div>';
+  // Separate windows: each document is counted and listed in exactly one of them.
   const groups=[['expired','Expired','over'],['month1','Within 1 month','over'],['month3','In 1–3 months','due'],['month6','In 3–6 months','']];
+  let h='<div class="sec"><div class="sh"><h3>Expiring soon</h3></div><div class="grid">'+groups.map(([k,label,cls])=>
+    `<div class="cell fill ${ex[k].length?cls:''}"><span class="cc">${label}</span><span class="big">${ex[k].length}</span></div>`).join('')+'</div>';
   const rows=groups.filter(([k])=>ex[k].length).map(([k,label,cls])=>`<div class="eg">${label}</div>`+ex[k].map(d=>
     `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
     (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
