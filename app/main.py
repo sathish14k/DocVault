@@ -40,15 +40,24 @@ SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no
 # (day, month, year). Any other document may carry an optional month/year expiry.
 # "pp" is the passport abbreviation used in file names such as KP_PP_New_2024.pdf.
 EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract"]
-# Every document filed under one of these categories also needs a full expiry date.
-EXPIRY_REQUIRED_CATEGORIES = ["Visa & Immigration"]
-# Documents in these categories must say what type of visa they are and which country issued it
-# (free text; VISA_TYPES and COUNTRIES are suggestions).
-VISA_TYPE_CATEGORIES = ["Visa & Immigration"]
 VISA_TYPES = ["Residence", "Employment", "Family / Dependent", "Golden", "Green", "Investor", "Student",
               "Freelance", "Tourist", "Visit", "Business", "Transit", "Schengen"]
+LICENSE_TYPES = ["Light vehicle", "Motorcycle", "Heavy vehicle", "Light bus", "Heavy bus", "Light forklift",
+                 "Heavy forklift", "International Driving Permit"]
+# Permit categories (visas, driving licences). Their documents need a full expiry date, can be acknowledged
+# as expired, and carry a type, issuing country and optional validity. Value: the type field's label and
+# its suggestions (free text is accepted; COUNTRIES suggests issuing countries). The columns are named
+# visa_type / visa_country / visa_validity because visas came first.
+PERMIT_CATEGORIES = {
+    "Visa & Immigration": ("Visa type", VISA_TYPES),
+    "Drivers License": ("License type", LICENSE_TYPES),
+}
+# Every document filed under one of these categories also needs a full expiry date.
+EXPIRY_REQUIRED_CATEGORIES = list(PERMIT_CATEGORIES)
+# Documents in these categories must have a type and issuing country.
+VISA_TYPE_CATEGORIES = list(PERMIT_CATEGORIES)
 # Expired documents in these categories can be acknowledged, which hides them from the Expired list.
-EXPIRY_ACK_CATEGORIES = ["Visa & Immigration"]
+EXPIRY_ACK_CATEGORIES = list(PERMIT_CATEGORIES)
 _EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
 
 DEFAULT_CATEGORIES = [
@@ -230,13 +239,18 @@ def has_visa_type(category: Optional[str]) -> bool:
     return (category or "").strip().lower() in (c.lower() for c in VISA_TYPE_CATEGORIES)
 
 
+def type_label(category: Optional[str]) -> str:
+    key = (category or "").strip().lower()
+    return next((label for c, (label, _) in PERMIT_CATEGORIES.items() if c.lower() == key), "Type")
+
+
 def clean_visa_field(category: Optional[str], v: Optional[str], label: str) -> str:
-    """Visa type / issuing country: required for visa categories; not kept on other documents."""
+    """Type / issuing country: required for permit categories; not kept on other documents."""
     if not has_visa_type(category):
         return ""
     v = (v or "").strip()[:60]
     if not v:
-        raise HTTPException(400, f"{label} is required for Visa & Immigration documents")
+        raise HTTPException(400, f"{label} is required for {category.strip()} documents")
     return v
 
 
@@ -402,15 +416,19 @@ def summary(member: str = ""):
 @app.get("/api/expiry-rules")
 def expiry_rules():
     con = db()
-    def with_used(base, col):  # suggestions plus any value already typed in
+    def with_used(base, col, category=None):  # suggestions plus any value already typed in
         seen = {t.lower() for t in base}
-        used = [r[0] for r in con.execute(
-            f"SELECT DISTINCT {col} FROM documents WHERE {col}!='' ORDER BY {col} COLLATE NOCASE")]
+        sql = (f"SELECT DISTINCT d.{col} FROM documents d LEFT JOIN categories c ON c.id=d.category_id "
+               f"WHERE d.{col}!=''" + (" AND c.name=? COLLATE NOCASE" if category else "") +
+               f" ORDER BY d.{col} COLLATE NOCASE")
+        used = [r[0] for r in con.execute(sql, (category,) if category else ())]
         return base + [t for t in used if t.lower() not in seen]
     try:
         return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES,
                 "ack_categories": EXPIRY_ACK_CATEGORIES, "visa_categories": VISA_TYPE_CATEGORIES,
-                "visa_types": with_used(VISA_TYPES, "visa_type"), "countries": with_used(COUNTRIES, "visa_country")}
+                "type_fields": {c.lower(): {"label": label, "options": with_used(opts, "visa_type", c)}
+                                for c, (label, opts) in PERMIT_CATEGORIES.items()},
+                "countries": with_used(COUNTRIES, "visa_country")}
     finally:
         con.close()
 
@@ -428,9 +446,9 @@ def expiring(member: str = ""):
     try:
         for r in con.execute(BASE_SQL + " WHERE " + " AND ".join(where), args).fetchall():
             exp = expiry_day(r["expiry_date"] or "")
+            if len(r["expiry_date"] or "") != 10 and needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):
+                out["missing"].append(doc_out(con, r))  # no expiry, or only month/year where a full date is due
             if not exp:
-                if needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):
-                    out["missing"].append(doc_out(con, r))
                 continue
             bucket = "expired" if exp < today else next((k for k, lim in limits if exp <= lim), None)
             if bucket == "expired" and r["expiry_ack"] and can_ack(r["category"]):
@@ -654,7 +672,8 @@ def upload_document(
             if not expiry_date:
                 raise HTTPException(400, "Enter the issue date so the expiry can be calculated from the validity")
         expiry_date = clean_expiry(expiry_date, needs_expiry(cat_name, title, tags, fname))
-        visa_type = clean_visa_field(cat_name, visa_type.strip() or (old["visa_type"] if old else ""), "Visa type")
+        visa_type = clean_visa_field(cat_name, visa_type.strip() or (old["visa_type"] if old else ""),
+                                     type_label(cat_name))
         visa_country = clean_visa_field(cat_name, visa_country.strip() or (old["visa_country"] if old else ""),
                                         "Issuing country")
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
@@ -730,7 +749,7 @@ def patch_document(i: int, p: DocPatch):
         if p.expiry_date is not None:
             con.execute("UPDATE documents SET expiry_date=? WHERE id=?", (clean_expiry(p.expiry_date), i))
         r = get_row(con, i)
-        for col, label in (("visa_type", "Visa type"), ("visa_country", "Issuing country")):
+        for col, label in (("visa_type", type_label(r["category"])), ("visa_country", "Issuing country")):
             v = getattr(p, col) if getattr(p, col) is not None else r[col]
             if r["status"] == "current":
                 v = clean_visa_field(r["category"], v, label)

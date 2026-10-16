@@ -223,7 +223,7 @@ a.dl{color:var(--hi)}
       <div class="f"><span id="fExpLbl">Expiry month (optional)</span><input type="month" id="fExp"></div>
     </div>
     <div class="row" id="fVisaRow" hidden>
-      <div class="f"><span>Visa type (required)</span><input type="text" id="fVisa" list="visaData" maxlength="60" placeholder="e.g. Residence, Golden, Tourist"></div>
+      <div class="f"><span id="fTypeLbl">Visa type (required)</span><input type="text" id="fVisa" list="visaData" maxlength="60"></div>
       <div class="f"><span>Issuing country (required)</span><input type="text" id="fCountry" list="countryData" maxlength="60" placeholder="e.g. United Arab Emirates"></div>
     </div>
     <div class="f" id="fValRow" hidden><span>Validity from issue date (fills in the expiry date; optional)</span>
@@ -372,10 +372,13 @@ async function refreshLibrary(){
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
 /* ---------- expiry ---------- */
-/* Passports, leases, rental/service contracts and Visa & Immigration documents need a full expiry date;
+/* Passports, leases, rental/service contracts and permit categories (Visa & Immigration, Drivers License)
+   need a full expiry date;
    others may have month/year. */
-let expRe=null,expCats=[],ackCats=[],visaCats=[];
-const visaLabel=d=>[d.visa_type&&(/\bvisa$/i.test(d.visa_type)?d.visa_type:d.visa_type+' visa'),d.visa_country,d.visa_validity].filter(Boolean).join(' · ');
+let expRe=null,expCats=[],ackCats=[],visaCats=[],typeFields={};
+/* Badge for permits: "Golden visa · United Arab Emirates · 24 months", "Light vehicle · United Arab Emirates" */
+const visaLabel=d=>{const isVisa=(d.category||'').trim().toLowerCase()==='visa & immigration';
+  return[d.visa_type&&(!isVisa||/\bvisa$/i.test(d.visa_type)?d.visa_type:d.visa_type+' visa'),d.visa_country,d.visa_validity].filter(Boolean).join(' · ')};
 /* Last valid day of a visa: the issue date counts as day 1 (24 months from 2026-01-15 -> 2028-01-14). */
 function expiryFromValidity(iso,n,unit){
   const[y,m,d]=iso.split('-').map(Number);let e;
@@ -392,7 +395,7 @@ async function loadExpiryRules(){
   const r=await api('/api/expiry-rules');
   expCats=r.categories.map(c=>c.toLowerCase());ackCats=r.ack_categories.map(c=>c.toLowerCase());
   visaCats=r.visa_categories.map(c=>c.toLowerCase());
-  $('#visaData').innerHTML=r.visa_types.map(t=>`<option value="${esc(t)}">`).join('');
+  typeFields=r.type_fields;
   $('#countryData').innerHTML=r.countries.map(t=>`<option value="${esc(t)}">`).join('');
   expRe=new RegExp('\\b(?:'+r.required.map(k=>k.replace(/ /g,'\\s+')).join('|')+')s?\\b');
 }
@@ -422,7 +425,7 @@ function renderExpiring(ex){
     (k==='expired'&&canAck(d.category)?`<label class="ack" title="Hide from the Expired list"><input type="checkbox" data-ack="${d.id}"> Acknowledge</label>`:'')+
     '</div>').join('')).join('');
   h+=rows?`<div class="rows" style="margin-top:10px">${rows}</div>`:'<div class="empties">Nothing expires in the next 6 months.</div>';
-  if(ex.missing.length)h+='<div class="empties">Needs an expiry date: '+
+  if(ex.missing.length)h+='<div class="empties">Needs a full expiry date: '+
     ex.missing.map(d=>`<button data-fix="${d.id}">${esc(d.title)}${curMember?'':' ('+esc(d.member||'Shared')+')'}</button>`).join(' · ')+'</div>';
   return h+'</div>';
 }
@@ -555,6 +558,12 @@ function syncExpiry(v){
   inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
   $('#fAckRow').hidden=!canAck($('#fCat').value);
   const visa=hasVisaType($('#fCat').value);
+  const tf=typeFields[($('#fCat').value||'').trim().toLowerCase()];
+  if(tf&&$('#fTypeLbl').dataset.cat!==tf.label){  // type label + suggestions follow the category (visa / license)
+    $('#fTypeLbl').dataset.cat=tf.label;$('#fTypeLbl').textContent=tf.label+' (required)';
+    $('#fVisa').placeholder='e.g. '+tf.options.slice(0,3).join(', ');
+    $('#visaData').innerHTML=tf.options.map(t=>`<option value="${esc(t)}">`).join('');
+  }
   $('#fVisaRow').hidden=$('#fValRow').hidden=!visa;
   $('#fDateLbl').textContent=visa?'Issue date':'Document date';$('#fVisa').required=$('#fCountry').required=visa&&!(mode==='edit'&&target.status!=='current');
   $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
