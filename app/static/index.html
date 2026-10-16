@@ -24,7 +24,7 @@ nav button.on{background:var(--soft);color:var(--ink);font-weight:550}
 .active-binder select,.viewing select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 8px;font-size:13px}
 main{max-width:960px;margin:0 auto;padding:28px 24px 80px}
 input,select,textarea,button{font:inherit;color:inherit}
-input[type=text],input[type=search],input[type=date],input[type=month],select,textarea{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input[type=text],input[type=search],input[type=number],input[type=date],input[type=month],select,textarea{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--line2);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 8%,transparent)}
 button.btn{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 13px;cursor:pointer;transition:border-color .15s,background .15s}
 button.btn:hover{border-color:var(--line2);background:var(--soft)}
@@ -219,13 +219,16 @@ a.dl{color:var(--hi)}
       <div class="f"><span>Category (type a new one to create it)</span><input type="text" id="fCat" list="catData"></div>
     </div>
     <div class="row">
-      <div class="f"><span>Document date</span><input type="date" id="fDate"></div>
+      <div class="f"><span id="fDateLbl">Document date</span><input type="date" id="fDate"></div>
       <div class="f"><span id="fExpLbl">Expiry month (optional)</span><input type="month" id="fExp"></div>
     </div>
     <div class="row" id="fVisaRow" hidden>
       <div class="f"><span>Visa type (required)</span><input type="text" id="fVisa" list="visaData" maxlength="60" placeholder="e.g. Residence, Golden, Tourist"></div>
       <div class="f"><span>Issuing country (required)</span><input type="text" id="fCountry" list="countryData" maxlength="60" placeholder="e.g. United Arab Emirates"></div>
     </div>
+    <div class="f" id="fValRow" hidden><span>Validity from issue date (fills in the expiry date; optional)</span>
+      <div style="display:flex;gap:8px"><input type="number" id="fValN" min="1" max="9999" step="1" placeholder="e.g. 30" style="flex:1">
+        <select id="fValU" style="width:auto"><option value="days">days</option><option value="months">months</option></select></div></div>
     <label class="chk f" id="fAckRow" hidden><input type="checkbox" id="fAck"> Acknowledge as expired (hide from the Expired list)</label>
     <div class="f"><span>Tags (comma separated)</span><input type="text" id="fTags"></div>
     <div class="f"><span>Notes</span><textarea id="fNotes" rows="2"></textarea></div>
@@ -372,7 +375,15 @@ const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join(''
 /* Passports, leases, rental/service contracts and Visa & Immigration documents need a full expiry date;
    others may have month/year. */
 let expRe=null,expCats=[],ackCats=[],visaCats=[];
-const visaLabel=d=>[d.visa_type&&(/\bvisa$/i.test(d.visa_type)?d.visa_type:d.visa_type+' visa'),d.visa_country].filter(Boolean).join(' · ');
+const visaLabel=d=>[d.visa_type&&(/\bvisa$/i.test(d.visa_type)?d.visa_type:d.visa_type+' visa'),d.visa_country,d.visa_validity].filter(Boolean).join(' · ');
+/* Last valid day of a visa: the issue date counts as day 1 (24 months from 2026-01-15 -> 2028-01-14). */
+function expiryFromValidity(iso,n,unit){
+  const[y,m,d]=iso.split('-').map(Number);let e;
+  if(unit==='months'){const last=new Date(Date.UTC(y,m-1+n+1,0)).getUTCDate();e=new Date(Date.UTC(y,m-1+n,Math.min(d,last)));
+    if(last<d)return e.toISOString().slice(0,10)}  // no such day in that month (31 Jan + 1 month): its last day
+  else e=new Date(Date.UTC(y,m-1,d+n));
+  e.setUTCDate(e.getUTCDate()-1);return e.toISOString().slice(0,10);
+}
 const hasVisaType=cat=>visaCats.includes((cat||'').trim().toLowerCase());
 const canAck=cat=>ackCats.includes((cat||'').trim().toLowerCase());
 const needsExpiry=(cat,...t)=>expCats.includes((cat||'').trim().toLowerCase())||
@@ -527,11 +538,13 @@ function openDocDialog(m,d){
   if(d){$('#fTitle').value=d.title;$('#fCat').value=d.category||'';$('#fDate').value=d.doc_date||'';$('#fTags').value=d.tags||'';$('#fNotes').value=m==='edit'?d.notes||'':''}
   if(m==='new'&&curCat&&curCat!==NO_CAT)$('#fCat').value=curCat;
   $('#fAck').checked=m==='edit'&&!!d.expiry_ack;
-  $('#fVisa').value=d?.visa_type||'';$('#fCountry').value=d?.visa_country||'';  // a renewal usually keeps both
+  $('#fVisa').value=d?.visa_type||'';$('#fCountry').value=d?.visa_country||'';  // a renewal usually keeps all three
+  const[vn,vu]=(d?.visa_validity||'').split(' ');$('#fValN').value=vn||'';$('#fValU').value=vu||'days';
   syncExpiry(m==='edit'?d.expiry_date||'':'');  // a new version gets its own expiry
   $('#dlgDoc').showModal();
 }
 $('#btnUpload').onclick=()=>openDocDialog('new');
+const validityValue=()=>{const n=parseInt($('#fValN').value,10);return !$('#fValRow').hidden&&n>0?`${n} ${$('#fValU').value}`:''};
 /* Switch the expiry field between required full date and optional month as the title/tags/file change. */
 function syncExpiry(v){
   const inp=$('#fExp');if(v===undefined)v=inp.value;
@@ -542,11 +555,20 @@ function syncExpiry(v){
   inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
   $('#fAckRow').hidden=!canAck($('#fCat').value);
   const visa=hasVisaType($('#fCat').value);
-  $('#fVisaRow').hidden=!visa;$('#fVisa').required=$('#fCountry').required=visa&&!(mode==='edit'&&target.status!=='current');
+  $('#fVisaRow').hidden=$('#fValRow').hidden=!visa;
+  $('#fDateLbl').textContent=visa?'Issue date':'Document date';$('#fVisa').required=$('#fCountry').required=visa&&!(mode==='edit'&&target.status!=='current');
   $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
 }
 ['#fTitle','#fTags','#fCat'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
 $('#fFile').addEventListener('change',()=>syncExpiry());
+/* Visa validity: recalculate the expiry whenever the issue date or validity changes (still editable by hand). */
+function applyValidity(){
+  const n=parseInt($('#fValN').value,10),iso=$('#fDate').value;
+  if($('#fValRow').hidden||!(n>0)||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return;
+  syncExpiry(expiryFromValidity(iso,n,$('#fValU').value));
+}
+['#fValN','#fDate'].forEach(s=>$(s).addEventListener('input',applyValidity));
+['#fValU','#fDate'].forEach(s=>$(s).addEventListener('change',applyValidity));
 $('#dlgCancel').onclick=()=>$('#dlgDoc').close();
 $('#docForm').onsubmit=async e=>{
   e.preventDefault();const btn=$('#dlgSave');
@@ -556,12 +578,12 @@ $('#docForm').onsubmit=async e=>{
   try{
     btn.disabled=true;btn.textContent='Saving…';
     if(mode==='edit'){
-      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,visa_type:$('#fVisa').value,visa_country:$('#fCountry').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
+      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,visa_type:$('#fVisa').value,visa_country:$('#fCountry').value,visa_validity:validityValue(),tags:$('#fTags').value,notes:$('#fNotes').value}));
     }else{
       const f=$('#fFile').files[0];if(!f){toast('Choose a file');return}
       const fd=new FormData();fd.append('file',f);
       fd.append('title',mode==='replace'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
-      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);fd.append('visa_type',$('#fVisa').value);fd.append('visa_country',$('#fCountry').value);
+      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);fd.append('visa_type',$('#fVisa').value);fd.append('visa_country',$('#fCountry').value);fd.append('visa_validity',validityValue());
       fd.append('tags',$('#fTags').value);fd.append('notes',$('#fNotes').value);
       if(mode==='replace')fd.append('supersedes_id',target.id);
       if(forceNext)fd.append('force','true');

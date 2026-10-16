@@ -13,7 +13,7 @@ import sqlite3
 import subprocess
 import tempfile
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS documents(
   filename TEXT NOT NULL,
   stored_path TEXT NOT NULL DEFAULT '',
   mime TEXT, size INTEGER, sha256 TEXT,
-  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, visa_type TEXT DEFAULT '', visa_country TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
+  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, visa_type TEXT DEFAULT '', visa_country TEXT DEFAULT '', visa_validity TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'current',
   supersedes_id INTEGER, superseded_by_id INTEGER,
   created_at TEXT NOT NULL);
@@ -88,7 +88,7 @@ FTS_SQL = ("CREATE VIRTUAL TABLE docs_fts USING fts5("
 BASE_SQL = ("SELECT d.*, c.name AS category, m.name AS member FROM documents d "
             "LEFT JOIN categories c ON c.id = d.category_id "
             "LEFT JOIN members m ON m.id = d.member_id")
-FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "visa_type", "visa_country", "notes", "tags", "status",
+FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "visa_type", "visa_country", "visa_validity", "notes", "tags", "status",
           "supersedes_id", "superseded_by_id", "created_at", "category", "member_id", "member")
 
 
@@ -114,6 +114,8 @@ def init():
         con.execute("ALTER TABLE documents ADD COLUMN visa_type TEXT DEFAULT ''")
     if "visa_country" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
         con.execute("ALTER TABLE documents ADD COLUMN visa_country TEXT DEFAULT ''")
+    if "visa_validity" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
+        con.execute("ALTER TABLE documents ADD COLUMN visa_validity TEXT DEFAULT ''")
     fts = con.execute("SELECT sql FROM sqlite_master WHERE name='docs_fts'").fetchone()
     if not fts or "visa_country" not in fts["sql"]:
         con.execute("DROP TABLE IF EXISTS docs_fts")
@@ -236,6 +238,34 @@ def clean_visa_field(category: Optional[str], v: Optional[str], label: str) -> s
     if not v:
         raise HTTPException(400, f"{label} is required for Visa & Immigration documents")
     return v
+
+
+def clean_validity(category: Optional[str], v: Optional[str]) -> str:
+    """Optional visa validity, stored as '<n> days' or '<n> months'; not kept on other documents."""
+    v = re.sub(r"\s+", " ", (v or "").strip().lower())
+    if not v or not has_visa_type(category):
+        return ""
+    m = re.fullmatch(r"(\d{1,4}) (day|month)s?", v)
+    if not m or int(m[1]) == 0:
+        raise HTTPException(400, "Validity must be a number of days or months, e.g. 30 days or 24 months")
+    return f"{int(m[1])} {m[2]}s"
+
+
+def expiry_from_validity(issue: str, validity: str) -> str:
+    """Last valid day, counting the issue date as day 1 (24 months from 2026-01-15 -> 2028-01-14)."""
+    try:
+        start = date.fromisoformat((issue or "").strip())
+    except ValueError:
+        return ""
+    if not validity:
+        return ""
+    n, unit = validity.split()
+    if unit == "days":
+        return (start + timedelta(days=int(n) - 1)).isoformat()
+    end = add_months(start, int(n))
+    if end.day < start.day:  # no such day in that month (31 Jan + 1 month): valid to its last day
+        return end.isoformat()
+    return (end - timedelta(days=1)).isoformat()
 
 
 def can_ack(category: Optional[str]) -> bool:
@@ -572,6 +602,7 @@ def upload_document(
     expiry_ack: bool = Form(False),
     visa_type: str = Form(""),
     visa_country: str = Form(""),
+    visa_validity: str = Form(""),
     notes: str = Form(""),
     tags: str = Form(""),
     supersedes_id: Optional[int] = Form(None),
@@ -617,6 +648,11 @@ def upload_document(
         cid = cat_id(con, category) if category.strip() else (old["category_id"] if old else None)
         mid = member_id(con, member) if member is not None else (old["member_id"] if old else None)
         cat_name = category.strip() or (old["category"] if old else "")
+        visa_validity = clean_validity(cat_name, visa_validity.strip() or (old["visa_validity"] if old else ""))
+        if not expiry_date.strip() and visa_validity:
+            expiry_date = expiry_from_validity(doc_date, visa_validity)
+            if not expiry_date:
+                raise HTTPException(400, "Enter the issue date so the expiry can be calculated from the validity")
         expiry_date = clean_expiry(expiry_date, needs_expiry(cat_name, title, tags, fname))
         visa_type = clean_visa_field(cat_name, visa_type.strip() or (old["visa_type"] if old else ""), "Visa type")
         visa_country = clean_visa_field(cat_name, visa_country.strip() or (old["visa_country"] if old else ""),
@@ -624,9 +660,10 @@ def upload_document(
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         cur = con.execute(
             "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,"
-            "expiry_ack,visa_type,visa_country,notes,tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "expiry_ack,visa_type,visa_country,visa_validity,notes,tags,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (title, cid, mid, fname, mime, size, digest, doc_date.strip(), expiry_date,
-             int(expiry_ack and can_ack(cat_name)), visa_type, visa_country, notes.strip(), tags.strip(),
+             int(expiry_ack and can_ack(cat_name)), visa_type, visa_country, visa_validity, notes.strip(), tags.strip(),
              datetime.now().isoformat(timespec="seconds")))
         i = cur.lastrowid
         dest_dir = FILES / str(i)
@@ -661,6 +698,7 @@ class DocPatch(BaseModel):
     expiry_ack: Optional[bool] = None
     visa_type: Optional[str] = None
     visa_country: Optional[str] = None
+    visa_validity: Optional[str] = None
     notes: Optional[str] = None
     tags: Optional[str] = None
 
@@ -699,8 +737,14 @@ def patch_document(i: int, p: DocPatch):
             elif not has_visa_type(r["category"]):
                 v = ""  # superseded history is never forced to gain these fields
             con.execute(f"UPDATE documents SET {col}=? WHERE id=?", ((v or "").strip()[:60], i))
+        validity = clean_validity(r["category"], p.visa_validity if p.visa_validity is not None else r["visa_validity"])
+        con.execute("UPDATE documents SET visa_validity=? WHERE id=?", (validity, i))
+        if not r["expiry_date"] and validity:
+            con.execute("UPDATE documents SET expiry_date=? WHERE id=?",
+                        (expiry_from_validity(r["doc_date"], validity), i))
         if p.expiry_ack is not None:
             con.execute("UPDATE documents SET expiry_ack=? WHERE id=?", (int(p.expiry_ack and can_ack(r["category"])), i))
+        r = get_row(con, i)
         if r["status"] == "current" and needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):
             clean_expiry(r["expiry_date"], required=True)  # uncommitted changes are discarded on close
         index_doc(con, i)
