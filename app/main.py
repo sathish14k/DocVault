@@ -41,6 +41,10 @@ SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no
 EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract"]
 # Every document filed under one of these categories also needs a full expiry date.
 EXPIRY_REQUIRED_CATEGORIES = ["Visa & Immigration"]
+# Documents in these categories must say what type of visa they are (free text; these are suggestions).
+VISA_TYPE_CATEGORIES = ["Visa & Immigration"]
+VISA_TYPES = ["Residence", "Employment", "Family / Dependent", "Golden", "Green", "Investor", "Student",
+              "Freelance", "Tourist", "Visit", "Business", "Transit", "Schengen"]
 # Expired documents in these categories can be acknowledged, which hides them from the Expired list.
 EXPIRY_ACK_CATEGORIES = ["Visa & Immigration"]
 _EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
@@ -62,7 +66,7 @@ CREATE TABLE IF NOT EXISTS documents(
   filename TEXT NOT NULL,
   stored_path TEXT NOT NULL DEFAULT '',
   mime TEXT, size INTEGER, sha256 TEXT,
-  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
+  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, visa_type TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'current',
   supersedes_id INTEGER, superseded_by_id INTEGER,
   created_at TEXT NOT NULL);
@@ -74,14 +78,15 @@ CREATE TABLE IF NOT EXISTS collection_items(
   position INTEGER NOT NULL,
   PRIMARY KEY(collection_id, document_id));
 """
-# content stays column 4 (used by snippet()); member is searchable so "priya passport" works
+# content stays column 4 (used by snippet()); member is searchable so "priya passport" works,
+# visa_type so "golden visa" works
 FTS_SQL = ("CREATE VIRTUAL TABLE docs_fts USING fts5("
-           "title, filename, tags, notes, content, member, tokenize='porter unicode61')")
+           "title, filename, tags, notes, content, member, visa_type, tokenize='porter unicode61')")
 
 BASE_SQL = ("SELECT d.*, c.name AS category, m.name AS member FROM documents d "
             "LEFT JOIN categories c ON c.id = d.category_id "
             "LEFT JOIN members m ON m.id = d.member_id")
-FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "notes", "tags", "status",
+FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "visa_type", "notes", "tags", "status",
           "supersedes_id", "superseded_by_id", "created_at", "category", "member_id", "member")
 
 
@@ -103,12 +108,15 @@ def init():
         con.execute("ALTER TABLE documents ADD COLUMN expiry_date TEXT DEFAULT ''")
     if "expiry_ack" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
         con.execute("ALTER TABLE documents ADD COLUMN expiry_ack INTEGER NOT NULL DEFAULT 0")
+    if "visa_type" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
+        con.execute("ALTER TABLE documents ADD COLUMN visa_type TEXT DEFAULT ''")
     fts = con.execute("SELECT sql FROM sqlite_master WHERE name='docs_fts'").fetchone()
-    if not fts or "member" not in fts["sql"]:
+    if not fts or "visa_type" not in fts["sql"]:
         con.execute("DROP TABLE IF EXISTS docs_fts")
         con.execute(FTS_SQL)
-        con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member) "
-                    "SELECT d.id, d.title, d.filename, d.tags, d.notes, d.content, COALESCE(m.name,'') "
+        con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member,visa_type) "
+                    "SELECT d.id, d.title, d.filename, d.tags, d.notes, d.content, COALESCE(m.name,''), "
+                    "COALESCE(d.visa_type,'') "
                     "FROM documents d LEFT JOIN members m ON m.id=d.member_id")
     if not con.execute("SELECT 1 FROM categories LIMIT 1").fetchone():
         con.executemany("INSERT INTO categories(name) VALUES(?)", [(c,) for c in DEFAULT_CATEGORIES])
@@ -170,8 +178,10 @@ def doc_path(r) -> Path:
 def index_doc(con, i: int):
     r = con.execute(BASE_SQL + " WHERE d.id=?", (i,)).fetchone()
     con.execute("DELETE FROM docs_fts WHERE rowid=?", (i,))
-    con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member) VALUES(?,?,?,?,?,?,?)",
-                (i, r["title"], r["filename"], r["tags"], r["notes"], r["content"], r["member"] or ""))
+    con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member,visa_type) "
+                "VALUES(?,?,?,?,?,?,?,?)",
+                (i, r["title"], r["filename"], r["tags"], r["notes"], r["content"], r["member"] or "",
+                 r["visa_type"] or ""))
 
 
 def cat_id(con, name: Optional[str]) -> Optional[int]:
@@ -208,6 +218,20 @@ def needs_expiry(category: Optional[str], *texts) -> bool:
         return True
     s = re.sub(r"[_\-.]+", " ", " ".join(t or "" for t in texts).lower())
     return bool(_EXPIRY_RE.search(s))
+
+
+def has_visa_type(category: Optional[str]) -> bool:
+    return (category or "").strip().lower() in (c.lower() for c in VISA_TYPE_CATEGORIES)
+
+
+def clean_visa_type(category: Optional[str], v: Optional[str]) -> str:
+    """Required for visa categories; not kept on other documents."""
+    if not has_visa_type(category):
+        return ""
+    v = (v or "").strip()[:60]
+    if not v:
+        raise HTTPException(400, "Visa type is required for Visa & Immigration documents")
+    return v
 
 
 def can_ack(category: Optional[str]) -> bool:
@@ -343,7 +367,14 @@ def summary(member: str = ""):
 
 @app.get("/api/expiry-rules")
 def expiry_rules():
-    return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES, "ack_categories": EXPIRY_ACK_CATEGORIES}
+    con = db()
+    used = [r[0] for r in con.execute(
+        "SELECT DISTINCT visa_type FROM documents WHERE visa_type!='' ORDER BY visa_type COLLATE NOCASE")]
+    con.close()
+    seen = {t.lower() for t in VISA_TYPES}
+    return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES, "ack_categories": EXPIRY_ACK_CATEGORIES,
+            "visa_categories": VISA_TYPE_CATEGORIES,
+            "visa_types": VISA_TYPES + [t for t in used if t.lower() not in seen]}
 
 
 @app.get("/api/expiring")
@@ -511,7 +542,7 @@ def list_documents(q: str = "", category: str = "", member: str = "", include_su
             a = [HL_S, HL_E, fq] + args
             if where:
                 sql += " AND " + " AND ".join(where)
-            sql += " ORDER BY bm25(docs_fts,10,5,5,3,1,8) LIMIT ?"
+            sql += " ORDER BY bm25(docs_fts,10,5,5,3,1,8,8) LIMIT ?"
         else:
             sql = BASE_SQL + (" WHERE " + " AND ".join(where) if where else "") + \
                   " ORDER BY d.created_at DESC, d.id DESC LIMIT ?"
@@ -531,6 +562,7 @@ def upload_document(
     doc_date: str = Form(""),
     expiry_date: str = Form(""),
     expiry_ack: bool = Form(False),
+    visa_type: str = Form(""),
     notes: str = Form(""),
     tags: str = Form(""),
     supersedes_id: Optional[int] = Form(None),
@@ -577,12 +609,13 @@ def upload_document(
         mid = member_id(con, member) if member is not None else (old["member_id"] if old else None)
         cat_name = category.strip() or (old["category"] if old else "")
         expiry_date = clean_expiry(expiry_date, needs_expiry(cat_name, title, tags, fname))
+        visa_type = clean_visa_type(cat_name, visa_type.strip() or (old["visa_type"] if old else ""))
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         cur = con.execute(
             "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,"
-            "expiry_ack,notes,tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "expiry_ack,visa_type,notes,tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (title, cid, mid, fname, mime, size, digest, doc_date.strip(), expiry_date,
-             int(expiry_ack and can_ack(cat_name)), notes.strip(), tags.strip(),
+             int(expiry_ack and can_ack(cat_name)), visa_type, notes.strip(), tags.strip(),
              datetime.now().isoformat(timespec="seconds")))
         i = cur.lastrowid
         dest_dir = FILES / str(i)
@@ -615,6 +648,7 @@ class DocPatch(BaseModel):
     doc_date: Optional[str] = None
     expiry_date: Optional[str] = None
     expiry_ack: Optional[bool] = None
+    visa_type: Optional[str] = None
     notes: Optional[str] = None
     tags: Optional[str] = None
 
@@ -646,6 +680,12 @@ def patch_document(i: int, p: DocPatch):
         if p.expiry_date is not None:
             con.execute("UPDATE documents SET expiry_date=? WHERE id=?", (clean_expiry(p.expiry_date), i))
         r = get_row(con, i)
+        vt = p.visa_type if p.visa_type is not None else r["visa_type"]
+        if r["status"] == "current":
+            vt = clean_visa_type(r["category"], vt)
+        elif not has_visa_type(r["category"]):
+            vt = ""  # superseded history is never forced to gain a type
+        con.execute("UPDATE documents SET visa_type=? WHERE id=?", ((vt or "").strip()[:60], i))
         if p.expiry_ack is not None:
             con.execute("UPDATE documents SET expiry_ack=? WHERE id=?", (int(p.expiry_ack and can_ack(r["category"])), i))
         if r["status"] == "current" and needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):

@@ -205,6 +205,7 @@ a.dl{color:var(--hi)}
 </main>
 
 <datalist id="catData"></datalist>
+<datalist id="visaData"></datalist>
 
 <dialog id="dlgDoc">
   <form id="docForm" method="dialog">
@@ -220,6 +221,7 @@ a.dl{color:var(--hi)}
       <div class="f"><span>Document date</span><input type="date" id="fDate"></div>
       <div class="f"><span id="fExpLbl">Expiry month (optional)</span><input type="month" id="fExp"></div>
     </div>
+    <div class="f" id="fVisaRow" hidden><span>Visa type (required; pick or type)</span><input type="text" id="fVisa" list="visaData" maxlength="60" placeholder="e.g. Residence, Golden, Tourist"></div>
     <label class="chk f" id="fAckRow" hidden><input type="checkbox" id="fAck"> Acknowledge as expired (hide from the Expired list)</label>
     <div class="f"><span>Tags (comma separated)</span><input type="text" id="fTags"></div>
     <div class="f"><span>Notes</span><textarea id="fNotes" rows="2"></textarea></div>
@@ -365,13 +367,17 @@ const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join(''
 /* ---------- expiry ---------- */
 /* Passports, leases, rental/service contracts and Visa & Immigration documents need a full expiry date;
    others may have month/year. */
-let expRe=null,expCats=[],ackCats=[];
+let expRe=null,expCats=[],ackCats=[],visaCats=[];
+const visaLabel=t=>/\bvisa$/i.test(t)?t:t+' visa';
+const hasVisaType=cat=>visaCats.includes((cat||'').trim().toLowerCase());
 const canAck=cat=>ackCats.includes((cat||'').trim().toLowerCase());
 const needsExpiry=(cat,...t)=>expCats.includes((cat||'').trim().toLowerCase())||
   !!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' '));
 async function loadExpiryRules(){
   const r=await api('/api/expiry-rules');
   expCats=r.categories.map(c=>c.toLowerCase());ackCats=r.ack_categories.map(c=>c.toLowerCase());
+  visaCats=r.visa_categories.map(c=>c.toLowerCase());
+  $('#visaData').innerHTML=r.visa_types.map(t=>`<option value="${esc(t)}">`).join('');
   expRe=new RegExp('\\b(?:'+r.required.map(k=>k.replace(/ /g,'\\s+')).join('|')+')s?\\b');
 }
 function expiryEnd(v){if(!v)return null;const[y,m,d]=v.split('-').map(Number);return d?new Date(y,m-1,d):new Date(y,m,0)}
@@ -393,6 +399,7 @@ function renderExpiring(ex){
     `<div class="cell fill ${ex[k].length?cls:''}"><span class="cc">${label}</span><span class="big">${ex[k].length}</span></div>`).join('')+'</div>';
   const rows=groups.filter(([k])=>ex[k].length).map(([k,label,cls])=>`<div class="eg">${label}</div>`+ex[k].map(d=>
     `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
+    (d.visa_type?`<span class="m">${esc(visaLabel(d.visa_type))}</span>`:'')+
     (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
     `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span>`+
     `<button class="lnk" data-newver="${d.id}" title="Upload the renewed document; this one is kept in history">New version</button>`+
@@ -472,6 +479,7 @@ function docHtml(d){
     <a class="title" data-act="view" data-id="${d.id}">${esc(d.title)}</a>
     ${d.version>1||old?`<span class="badge ${old?'old':''}">${old?'superseded · ':''}v${d.version}</span>`:''}
     <span class="badge who">${esc(d.member||'Shared')}</span>
+    ${d.visa_type?`<span class="badge">${esc(visaLabel(d.visa_type))}</span>`:''}
     ${d.category?`<span class="badge">${esc(d.category)}</span>`:''}
     ${expBadge(d)}
     <div class="meta">${esc(d.filename)} · ${fmtSize(d.size)}${d.doc_date?' · '+esc(d.doc_date):''}${d.tags?' · '+esc(d.tags):''}</div>
@@ -514,6 +522,7 @@ function openDocDialog(m,d){
   if(d){$('#fTitle').value=d.title;$('#fCat').value=d.category||'';$('#fDate').value=d.doc_date||'';$('#fTags').value=d.tags||'';$('#fNotes').value=m==='edit'?d.notes||'':''}
   if(m==='new'&&curCat&&curCat!==NO_CAT)$('#fCat').value=curCat;
   $('#fAck').checked=m==='edit'&&!!d.expiry_ack;
+  $('#fVisa').value=d?.visa_type||'';  // a renewal usually keeps the same visa type
   syncExpiry(m==='edit'?d.expiry_date||'':'');  // a new version gets its own expiry
   $('#dlgDoc').showModal();
 }
@@ -527,6 +536,8 @@ function syncExpiry(v){
   inp.type=full?'date':'month';inp.value=full?(v.length===10?v:''):v.slice(0,7);
   inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
   $('#fAckRow').hidden=!canAck($('#fCat').value);
+  const visa=hasVisaType($('#fCat').value);
+  $('#fVisaRow').hidden=!visa;$('#fVisa').required=visa&&!(mode==='edit'&&target.status!=='current');
   $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
 }
 ['#fTitle','#fTags','#fCat'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
@@ -540,12 +551,12 @@ $('#docForm').onsubmit=async e=>{
   try{
     btn.disabled=true;btn.textContent='Saving…';
     if(mode==='edit'){
-      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,tags:$('#fTags').value,notes:$('#fNotes').value}));
+      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,visa_type:$('#fVisa').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
     }else{
       const f=$('#fFile').files[0];if(!f){toast('Choose a file');return}
       const fd=new FormData();fd.append('file',f);
       fd.append('title',mode==='replace'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
-      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);
+      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);fd.append('visa_type',$('#fVisa').value);
       fd.append('tags',$('#fTags').value);fd.append('notes',$('#fNotes').value);
       if(mode==='replace')fd.append('supersedes_id',target.id);
       if(forceNext)fd.append('force','true');
