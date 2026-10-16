@@ -74,6 +74,7 @@ label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13
 .cell.due .big{color:var(--warn)}.cell.over .big{color:var(--danger)}
 .eg{padding:7px 16px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);background:var(--soft);border-top:1px solid var(--line)}
 .eg:first-child{border-top:0}
+.rw .ack{display:flex;gap:5px;align-items:center;font-size:12.5px;color:var(--mute);white-space:nowrap;cursor:pointer}
 .rw .m.due{color:var(--warn)}.rw .m.over{color:var(--danger)}
 .empties{margin-top:10px;font-size:13px;color:var(--faint);line-height:2}
 .empties button{background:none;border:0;padding:0 2px;color:var(--mute);cursor:pointer;font-size:13px}
@@ -217,6 +218,7 @@ a.dl{color:var(--hi)}
       <div class="f"><span>Document date</span><input type="date" id="fDate"></div>
       <div class="f"><span id="fExpLbl">Expiry month (optional)</span><input type="month" id="fExp"></div>
     </div>
+    <label class="chk f" id="fAckRow" hidden><input type="checkbox" id="fAck"> Acknowledge as expired (hide from the Expired list)</label>
     <div class="f"><span>Tags (comma separated)</span><input type="text" id="fTags"></div>
     <div class="f"><span>Notes</span><textarea id="fNotes" rows="2"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -361,12 +363,13 @@ const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join(''
 /* ---------- expiry ---------- */
 /* Passports, leases, rental/service contracts and Visa & Immigration documents need a full expiry date;
    others may have month/year. */
-let expRe=null,expCats=[];
+let expRe=null,expCats=[],ackCats=[];
+const canAck=cat=>ackCats.includes((cat||'').trim().toLowerCase());
 const needsExpiry=(cat,...t)=>expCats.includes((cat||'').trim().toLowerCase())||
   !!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' '));
 async function loadExpiryRules(){
   const r=await api('/api/expiry-rules');
-  expCats=r.categories.map(c=>c.toLowerCase());
+  expCats=r.categories.map(c=>c.toLowerCase());ackCats=r.ack_categories.map(c=>c.toLowerCase());
   expRe=new RegExp('\\b(?:'+r.required.map(k=>k.replace(/ /g,'\\s+')).join('|')+')s?\\b');
 }
 function expiryEnd(v){if(!v)return null;const[y,m,d]=v.split('-').map(Number);return d?new Date(y,m-1,d):new Date(y,m,0)}
@@ -378,6 +381,7 @@ function relDays(n){
 function expBadge(d){
   if(!d.expiry_date)return d.status==='current'&&needsExpiry(d.category,d.title,d.tags,d.filename)?'<span class="badge old">No expiry date</span>':'';
   const n=daysLeft(d.expiry_date);
+  if(n<0&&d.expiry_ack&&canAck(d.category))return `<span class="badge" title="Acknowledged as expired">Expired ${esc(d.expiry_date)} · acknowledged</span>`;
   return `<span class="badge ${n<0?'exp':n<=183?'old':''}" title="${esc(relDays(n))}">${n<0?'Expired':'Expires'} ${esc(d.expiry_date)}</span>`;
 }
 function renderExpiring(ex){
@@ -388,7 +392,9 @@ function renderExpiring(ex){
   const rows=groups.filter(([k])=>ex[k].length).map(([k,label,cls])=>`<div class="eg">${label}</div>`+ex[k].map(d=>
     `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
     (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
-    `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span></div>`).join('')).join('');
+    `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span>`+
+    (k==='expired'&&canAck(d.category)?`<label class="ack" title="Hide from the Expired list"><input type="checkbox" data-ack="${d.id}"> Acknowledge</label>`:'')+
+    '</div>').join('')).join('');
   h+=rows?`<div class="rows" style="margin-top:10px">${rows}</div>`:'<div class="empties">Nothing expires in the next 6 months.</div>';
   if(ex.missing.length)h+='<div class="empties">Needs an expiry date: '+
     ex.missing.map(d=>`<button data-fix="${d.id}">${esc(d.title)}${curMember?'':' ('+esc(d.member||'Shared')+')'}</button>`).join(' · ')+'</div>';
@@ -439,7 +445,14 @@ async function renderHome(seq){
   $('#home').innerHTML=h;
 }
 $('#hero').onclick=e=>{const w=e.target.closest('[data-who]');if(w)setMember(w.dataset.who)};
+$('#home').onchange=async e=>{
+  const a=e.target.closest('[data-ack]');if(!a)return;
+  a.disabled=true;
+  try{await api('/api/documents/'+a.dataset.ack,jreq('PATCH',{expiry_ack:true}));toast('Acknowledged: removed from the Expired list');refreshLibrary()}
+  catch(er){a.checked=false;a.disabled=false;toast(er.message)}
+};
 $('#home').onclick=e=>{
+  if(e.target.closest('.ack'))return;  // the tick box acts on change, not as a row click
   const w=e.target.closest('[data-who]');if(w)return setMember(w.dataset.who);
   const g=e.target.closest('[data-go]');if(g)return show(g.dataset.go);
   const fx=e.target.closest('[data-fix]');if(fx)return openDocDialog('edit',docsById[fx.dataset.fix]);
@@ -496,6 +509,7 @@ function openDocDialog(m,d){
   $('#fMember').value=d?(d.member||SHARED):curMember;
   if(d){$('#fTitle').value=d.title;$('#fCat').value=d.category||'';$('#fDate').value=d.doc_date||'';$('#fTags').value=d.tags||'';$('#fNotes').value=m==='edit'?d.notes||'':''}
   if(m==='new'&&curCat&&curCat!==NO_CAT)$('#fCat').value=curCat;
+  $('#fAck').checked=m==='edit'&&!!d.expiry_ack;
   syncExpiry(m==='edit'?d.expiry_date||'':'');  // a new version gets its own expiry
   $('#dlgDoc').showModal();
 }
@@ -508,6 +522,7 @@ function syncExpiry(v){
   const full=req||v.length===10;
   inp.type=full?'date':'month';inp.value=full?(v.length===10?v:''):v.slice(0,7);
   inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
+  $('#fAckRow').hidden=!canAck($('#fCat').value);
   $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
 }
 ['#fTitle','#fTags','#fCat'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
@@ -521,12 +536,12 @@ $('#docForm').onsubmit=async e=>{
   try{
     btn.disabled=true;btn.textContent='Saving…';
     if(mode==='edit'){
-      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
+      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,tags:$('#fTags').value,notes:$('#fNotes').value}));
     }else{
       const f=$('#fFile').files[0];if(!f){toast('Choose a file');return}
       const fd=new FormData();fd.append('file',f);
       fd.append('title',mode==='replace'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
-      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);
+      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);
       fd.append('tags',$('#fTags').value);fd.append('notes',$('#fNotes').value);
       if(mode==='replace')fd.append('supersedes_id',target.id);
       if(forceNext)fd.append('force','true');

@@ -41,6 +41,8 @@ SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no
 EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract"]
 # Every document filed under one of these categories also needs a full expiry date.
 EXPIRY_REQUIRED_CATEGORIES = ["Visa & Immigration"]
+# Expired documents in these categories can be acknowledged, which hides them from the Expired list.
+EXPIRY_ACK_CATEGORIES = ["Visa & Immigration"]
 _EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
 
 DEFAULT_CATEGORIES = [
@@ -60,7 +62,7 @@ CREATE TABLE IF NOT EXISTS documents(
   filename TEXT NOT NULL,
   stored_path TEXT NOT NULL DEFAULT '',
   mime TEXT, size INTEGER, sha256 TEXT,
-  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
+  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'current',
   supersedes_id INTEGER, superseded_by_id INTEGER,
   created_at TEXT NOT NULL);
@@ -79,7 +81,7 @@ FTS_SQL = ("CREATE VIRTUAL TABLE docs_fts USING fts5("
 BASE_SQL = ("SELECT d.*, c.name AS category, m.name AS member FROM documents d "
             "LEFT JOIN categories c ON c.id = d.category_id "
             "LEFT JOIN members m ON m.id = d.member_id")
-FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "notes", "tags", "status",
+FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "notes", "tags", "status",
           "supersedes_id", "superseded_by_id", "created_at", "category", "member_id", "member")
 
 
@@ -99,6 +101,8 @@ def init():
         con.execute("ALTER TABLE documents ADD COLUMN member_id INTEGER REFERENCES members(id)")
     if "expiry_date" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
         con.execute("ALTER TABLE documents ADD COLUMN expiry_date TEXT DEFAULT ''")
+    if "expiry_ack" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
+        con.execute("ALTER TABLE documents ADD COLUMN expiry_ack INTEGER NOT NULL DEFAULT 0")
     fts = con.execute("SELECT sql FROM sqlite_master WHERE name='docs_fts'").fetchone()
     if not fts or "member" not in fts["sql"]:
         con.execute("DROP TABLE IF EXISTS docs_fts")
@@ -204,6 +208,10 @@ def needs_expiry(category: Optional[str], *texts) -> bool:
         return True
     s = re.sub(r"[_\-.]+", " ", " ".join(t or "" for t in texts).lower())
     return bool(_EXPIRY_RE.search(s))
+
+
+def can_ack(category: Optional[str]) -> bool:
+    return (category or "").strip().lower() in (c.lower() for c in EXPIRY_ACK_CATEGORIES)
 
 
 def clean_expiry(v: Optional[str], required: bool = False) -> str:
@@ -335,7 +343,7 @@ def summary(member: str = ""):
 
 @app.get("/api/expiry-rules")
 def expiry_rules():
-    return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES}
+    return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES, "ack_categories": EXPIRY_ACK_CATEGORIES}
 
 
 @app.get("/api/expiring")
@@ -356,6 +364,8 @@ def expiring(member: str = ""):
                     out["missing"].append(doc_out(con, r))
                 continue
             bucket = "expired" if exp < today else next((k for k, lim in limits if exp <= lim), None)
+            if bucket == "expired" and r["expiry_ack"] and can_ack(r["category"]):
+                continue  # acknowledged as expired
             if bucket:
                 d = doc_out(con, r)
                 d["expires_on"], d["days_left"] = exp.isoformat(), (exp - today).days
@@ -520,6 +530,7 @@ def upload_document(
     member: Optional[str] = Form(None),  # "" = shared; omitted = keep the superseded doc's member
     doc_date: str = Form(""),
     expiry_date: str = Form(""),
+    expiry_ack: bool = Form(False),
     notes: str = Form(""),
     tags: str = Form(""),
     supersedes_id: Optional[int] = Form(None),
@@ -568,9 +579,10 @@ def upload_document(
         expiry_date = clean_expiry(expiry_date, needs_expiry(cat_name, title, tags, fname))
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         cur = con.execute(
-            "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,notes,"
-            "tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-            (title, cid, mid, fname, mime, size, digest, doc_date.strip(), expiry_date, notes.strip(), tags.strip(),
+            "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,"
+            "expiry_ack,notes,tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (title, cid, mid, fname, mime, size, digest, doc_date.strip(), expiry_date,
+             int(expiry_ack and can_ack(cat_name)), notes.strip(), tags.strip(),
              datetime.now().isoformat(timespec="seconds")))
         i = cur.lastrowid
         dest_dir = FILES / str(i)
@@ -602,6 +614,7 @@ class DocPatch(BaseModel):
     member: Optional[str] = None  # "" = shared
     doc_date: Optional[str] = None
     expiry_date: Optional[str] = None
+    expiry_ack: Optional[bool] = None
     notes: Optional[str] = None
     tags: Optional[str] = None
 
@@ -633,6 +646,8 @@ def patch_document(i: int, p: DocPatch):
         if p.expiry_date is not None:
             con.execute("UPDATE documents SET expiry_date=? WHERE id=?", (clean_expiry(p.expiry_date), i))
         r = get_row(con, i)
+        if p.expiry_ack is not None:
+            con.execute("UPDATE documents SET expiry_ack=? WHERE id=?", (int(p.expiry_ack and can_ack(r["category"])), i))
         if r["status"] == "current" and needs_expiry(r["category"], r["title"], r["tags"], r["filename"]):
             clean_expiry(r["expiry_date"], required=True)  # uncommitted changes are discarded on close
         index_doc(con, i)
