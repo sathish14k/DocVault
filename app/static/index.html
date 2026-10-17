@@ -302,9 +302,10 @@ a.dl{color:var(--hi)}
 <dialog id="dlgBulk">
   <form id="bulkForm" method="dialog">
     <h3 style="margin-top:0">Bulk upload</h3>
-    <div class="note">Each file is filed as it is, titled by its file name. Nothing else is asked; edit any of them later if you want.</div>
+    <div class="note">For papers that need no issue or expiry date: each file is filed as it is, titled by its file name. Edit any of them later if you want.</div>
     <div class="f"><span>Belongs to</span><select id="bMember"></select></div>
-    <div class="f"><span>Category</span><select id="bCat"></select></div>
+    <div class="f"><span>Category (only those that need no dates or other details)</span><select id="bCat"></select>
+      <div class="meta" id="bHint" style="margin-top:4px"></div></div>
     <div class="f"><span>Files (choose as many as you like)</span><input type="file" id="bFiles" multiple></div>
     <div class="meta" id="bStatus" style="margin-bottom:10px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -498,7 +499,7 @@ function groupedDocs(t,docs){
 }
 async function refreshLibrary(){
   const seq=++libSeq,q=$('#q').value.trim();
-  $('#btnBulk').hidden=!(curCat&&isBulk(curCat));
+  $('#btnBulk').hidden=curCat!=null&&curCat!==NO_CAT&&!bulkOk(curCat);  // not inside a category that needs dates or details
   if(curCat==null&&!q)return renderHome(seq);
   $('#home').innerHTML='';setHomeMode(false);
   const crumb=$('#crumb');crumb.hidden=false;
@@ -654,9 +655,19 @@ const ICONS={
   disk:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2.5 2.5"/>',
+  bank:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>',
+  tool:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/>',
+  bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  phone:'<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  wifi:'<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/>',
+  drop:'<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  flame:'<path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3-1-3 0-6 0-8z"/>',
 };
 const CAT_LOOK=[[/insur/,'shield',3],[/visa|immigra/,'globe',7],[/travel|passport/,'plane',1],[/licen[cs]e|driv/,'wheel',2],
-  [/accident/,'alert',8],[/purchase|invoice|receipt/,'receipt',4],[/regist/,'doc',1],[/test|inspect/,'check',6],[/vehicle|\bcar/,'car',8],
+  [/accident/,'alert',8],[/purchase/,'key',4],[/regist/,'doc',1],[/test|inspect/,'check',6],[/mortgage|loan/,'bank',7],
+  [/electric|power|dewa/,'bolt',4],[/water/,'drop',1],[/\bgas\b/,'flame',8],[/phone|mobile|telecom/,'phone',7],[/internet|broadband|wifi/,'wifi',3],
+  [/bill|charge|utilit|invoice|receipt/,'receipt',2],[/mainten|warrant|repair/,'tool',6],[/vehicle|\bcar/,'car',8],
   [/educat|school|degree/,'cap',4],[/employ|work|job|salary/,'case',1],[/financ|tax|bank/,'wallet',6],[/propert|tenan|lease|home|rent/,'house',2],
   [/medic|health|hospital/,'heart',5],[/certif/,'award',5],[/identity|\bid\b/,'id',1]];
 function catLook(cat){
@@ -909,16 +920,27 @@ $('#sDone').onclick=async()=>{
 $('#btnScan').onclick=()=>openScan();
 $('#fScan').onclick=()=>openScan();
 
-/* ---------- bulk upload (Purchase Documents etc.): one request per file, one after another ---------- */
+/* ---------- bulk upload: many files at once, one request per file, one after another ----------
+   Offered for categories that need no expiry date, type/country or provider (and always for BULK_CATEGORIES
+   such as Purchase Documents). Elsewhere a file whose name says passport, lease, insurance… still needs an
+   expiry date, so it is skipped and listed to upload on its own. */
 let bulkBusy=false,bulkStop=false;
+const bulkOk=cat=>isBulk(cat)||!(needsExpiry(cat)||hasVisaType(cat)||hasProvider(cat));
+function bulkHint(){
+  const c=$('#bCat').value;
+  $('#bHint').textContent=!c?'':isBulk(c)?'Nothing else is asked here, whatever the file names say.'
+    :'Files whose names mention a passport, lease, contract or insurance need an expiry date, so they are skipped and listed; upload those with + Upload.';
+}
 function openBulk(){
   $('#bulkForm').reset();$('#bStatus').textContent='';
   $('#bMember').innerHTML=$('#fMember').innerHTML;$('#bMember').value=curMember;
-  const bc=cats.map(c=>c.name).filter(isBulk);
-  $('#bCat').innerHTML=bc.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  if(bc.includes(curCat))$('#bCat').value=curCat;
-  $('#dlgBulk').showModal();
+  const bc=cats.map(c=>c.name).filter(bulkOk);
+  $('#bCat').innerHTML='<option value="">— choose category —</option>'+bc.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')+
+    `<option value="${NO_CAT}">No category</option>`;
+  if(bc.includes(curCat)||curCat===NO_CAT)$('#bCat').value=curCat;
+  bulkHint();$('#dlgBulk').showModal();
 }
+$('#bCat').onchange=bulkHint;
 $('#btnBulk').onclick=openBulk;
 $('#bCancel').onclick=()=>{if(!bulkBusy)return $('#dlgBulk').close();bulkStop=true;$('#bStatus').textContent='Stopping after this file…'};
 $('#dlgBulk').oncancel=e=>{if(bulkBusy){e.preventDefault();bulkStop=true}};  // Esc while uploading stops instead of hiding it
@@ -927,11 +949,13 @@ $('#bulkForm').onsubmit=async e=>{
   const files=[...$('#bFiles').files],who=$('#bMember').value,btn=$('#bSave');
   if(!files.length)return toast('Choose the files');
   if(!who&&members.length)return toast('Choose who these documents belong to');
+  const cat=$('#bCat').value;if(!cat)return toast('Choose a category');
   bulkBusy=true;bulkStop=false;btn.disabled=true;
   const done=[],skipped=[],failed=[];
   for(const[k,f]of files.entries()){
     if(bulkStop)break;
-    const fd=new FormData();fd.append('file',f);fd.append('category',$('#bCat').value);fd.append('member',who===SHARED?'':who);
+    if(!isBulk(cat)&&needsExpiry('',f.name)){skipped.push(`${f.name}: needs an expiry date, upload it with + Upload`);continue}
+    const fd=new FormData();fd.append('file',f);fd.append('category',cat===NO_CAT?'':cat);fd.append('member',who===SHARED?'':who);
     try{await uploadForm(fd,p=>$('#bStatus').textContent=`Uploading ${k+1} of ${files.length}: ${f.name} (${p}%)`);done.push(f.name)}
     catch(er){if(er.status===409&&er.body.duplicate)skipped.push(`${f.name}: already in the vault (“${er.body.duplicate.title}”)`);
       else failed.push(`${f.name}: ${er.message}`)}
