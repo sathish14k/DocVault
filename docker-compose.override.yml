@@ -3,6 +3,10 @@ services:
     volumes:
       - ./app:/srv/app
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      # Network scanner (eSCL / AirScan), set in .env, e.g. SCANNER_URL=http://192.168.0.110 (HP Ink Tank 410).
+      # Empty hides the Scan button.
+      - SCANNER_URL=${SCANNER_URL:-}
     # Tailnet only: localhost binding, reached through Caddy at
     # https://nd-homeserver.tail2ca440.ts.net:3450 (Caddy drops non-Tailscale clients).
     ports: !override

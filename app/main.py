@@ -6,12 +6,14 @@ import calendar
 import hashlib
 import mimetypes
 import os
+import queue
 import re
 import secrets
 import shutil
 import sqlite3
 import subprocess
 import tempfile
+import threading
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,22 +27,24 @@ from pypdf import PdfReader, PdfWriter
 from starlette.background import BackgroundTask
 
 from .countries import COUNTRIES
+from . import scanner
 from .extract import IMG_EXT, extract_text
 
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
-FILES, CACHE, EXPORTS = DATA / "files", DATA / "cache", DATA / "exports"
-for _d in (FILES, CACHE, EXPORTS):
+FILES, CACHE, EXPORTS, SCANS = DATA / "files", DATA / "cache", DATA / "exports", DATA / "scans"
+for _d in (FILES, CACHE, EXPORTS, SCANS):
     _d.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA / "vault.db"
 PASSWORD = os.environ.get("APP_PASSWORD", "")
 HL_S, HL_E = "\x01", "\x02"  # snippet highlight markers (escaped client-side)
 NO_CAT = "__none__"  # category filter value meaning "no category"
 SHARED = "__shared__"  # member filter value meaning "shared / whole family" (no member)
+SUB = " › "  # category path separator: subcategory "Vehicle › Insurance" (one level deep)
 
 # Documents whose title, tags or file name mention one of these must carry a full expiry date
 # (day, month, year). Any other document may carry an optional month/year expiry.
 # "pp" is the passport abbreviation used in file names such as KP_PP_New_2024.pdf.
-EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract"]
+EXPIRY_REQUIRED = ["passport", "pp", "lease", "service contract", "rental contract", "tenancy contract", "insurance"]
 VISA_TYPES = ["Residence", "Employment", "Family / Dependent", "Golden", "Green", "Investor", "Student",
               "Freelance", "Tourist", "Visit", "Business", "Transit", "Schengen"]
 LICENSE_TYPES = ["Light vehicle", "Motorcycle", "Heavy vehicle", "Light bus", "Heavy bus", "Light forklift",
@@ -54,16 +58,24 @@ PERMIT_CATEGORIES = {
     "Drivers License": ("License type", LICENSE_TYPES),
 }
 # Every document filed under one of these categories also needs a full expiry date.
-EXPIRY_REQUIRED_CATEGORIES = list(PERMIT_CATEGORIES)
+EXPIRY_REQUIRED_CATEGORIES = list(PERMIT_CATEGORIES) + ["Travel", "Insurance"]
 # Documents in these categories must have a type and issuing country.
 VISA_TYPE_CATEGORIES = list(PERMIT_CATEGORIES)
+# Documents in these categories must name their provider (insurer). Suggestions are the providers already used.
+PROVIDER_CATEGORIES = ["Insurance"]
+# Bulk categories (matched like the rules below, so "Vehicle › Purchase Documents" counts): many files can be
+# uploaded at once, each titled by its file name, and no rule asks for more. A file named "insurance.pdf" here
+# needs no expiry date or provider.
+BULK_CATEGORIES = ["Purchase Documents"]
 # Expired documents in these categories can be acknowledged, which hides them from the Expired list.
-EXPIRY_ACK_CATEGORIES = list(PERMIT_CATEGORIES)
+EXPIRY_ACK_CATEGORIES = list(PERMIT_CATEGORIES) + ["Insurance"]
 _EXPIRY_RE = re.compile(r"\b(?:" + "|".join(k.replace(" ", r"\s+") for k in EXPIRY_REQUIRED) + r")s?\b")
 
 DEFAULT_CATEGORIES = [
     "Identity", "Visa & Immigration", "Education", "Employment", "Finance & Tax",
     "Property & Tenancy", "Vehicle", "Medical", "Insurance", "Certificates", "Other",
+    "Vehicle › Insurance", "Vehicle › Registration", "Vehicle › Testing", "Vehicle › Accident Reports",
+    "Vehicle › Purchase Documents",
 ]
 
 SCHEMA = """
@@ -78,7 +90,7 @@ CREATE TABLE IF NOT EXISTS documents(
   filename TEXT NOT NULL,
   stored_path TEXT NOT NULL DEFAULT '',
   mime TEXT, size INTEGER, sha256 TEXT,
-  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, visa_type TEXT DEFAULT '', visa_country TEXT DEFAULT '', visa_validity TEXT DEFAULT '', notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
+  doc_date TEXT DEFAULT '', expiry_date TEXT DEFAULT '', expiry_ack INTEGER NOT NULL DEFAULT 0, visa_type TEXT DEFAULT '', visa_country TEXT DEFAULT '', visa_validity TEXT DEFAULT '', provider TEXT DEFAULT '', indexed INTEGER NOT NULL DEFAULT 1, notes TEXT DEFAULT '', tags TEXT DEFAULT '', content TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'current',
   supersedes_id INTEGER, superseded_by_id INTEGER,
   created_at TEXT NOT NULL);
@@ -91,14 +103,14 @@ CREATE TABLE IF NOT EXISTS collection_items(
   PRIMARY KEY(collection_id, document_id));
 """
 # content stays column 4 (used by snippet()); member is searchable so "priya passport" works,
-# visa_type/visa_country so "golden visa" or "schengen france" work
+# visa_type/visa_country so "golden visa" or "schengen france" work, provider so "axa insurance" works
 FTS_SQL = ("CREATE VIRTUAL TABLE docs_fts USING fts5("
-           "title, filename, tags, notes, content, member, visa_type, visa_country, tokenize='porter unicode61')")
+           "title, filename, tags, notes, content, member, visa_type, visa_country, provider, tokenize='porter unicode61')")
 
 BASE_SQL = ("SELECT d.*, c.name AS category, m.name AS member FROM documents d "
             "LEFT JOIN categories c ON c.id = d.category_id "
             "LEFT JOIN members m ON m.id = d.member_id")
-FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "visa_type", "visa_country", "visa_validity", "notes", "tags", "status",
+FIELDS = ("id", "title", "filename", "mime", "size", "doc_date", "expiry_date", "expiry_ack", "visa_type", "visa_country", "visa_validity", "provider", "indexed", "notes", "tags", "status",
           "supersedes_id", "superseded_by_id", "created_at", "category", "member_id", "member")
 
 
@@ -126,13 +138,17 @@ def init():
         con.execute("ALTER TABLE documents ADD COLUMN visa_country TEXT DEFAULT ''")
     if "visa_validity" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
         con.execute("ALTER TABLE documents ADD COLUMN visa_validity TEXT DEFAULT ''")
+    if "provider" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
+        con.execute("ALTER TABLE documents ADD COLUMN provider TEXT DEFAULT ''")
+    if "indexed" not in [r["name"] for r in con.execute("PRAGMA table_info(documents)")]:
+        con.execute("ALTER TABLE documents ADD COLUMN indexed INTEGER NOT NULL DEFAULT 1")
     fts = con.execute("SELECT sql FROM sqlite_master WHERE name='docs_fts'").fetchone()
-    if not fts or "visa_country" not in fts["sql"]:
+    if not fts or "provider" not in fts["sql"]:
         con.execute("DROP TABLE IF EXISTS docs_fts")
         con.execute(FTS_SQL)
-        con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member,visa_type,visa_country) "
+        con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member,visa_type,visa_country,provider) "
                     "SELECT d.id, d.title, d.filename, d.tags, d.notes, d.content, COALESCE(m.name,''), "
-                    "COALESCE(d.visa_type,''), COALESCE(d.visa_country,'') "
+                    "COALESCE(d.visa_type,''), COALESCE(d.visa_country,''), COALESCE(d.provider,'') "
                     "FROM documents d LEFT JOIN members m ON m.id=d.member_id")
     if not con.execute("SELECT 1 FROM categories LIMIT 1").fetchone():
         con.executemany("INSERT INTO categories(name) VALUES(?)", [(c,) for c in DEFAULT_CATEGORIES])
@@ -172,6 +188,30 @@ def version_of(con, doc_id: int) -> int:
     return n
 
 
+def chain_ids(con, doc_id: int) -> list:
+    """All versions of a document, oldest first (the last one is the current version)."""
+    head = doc_id
+    while p := con.execute("SELECT supersedes_id FROM documents WHERE id=?", (head,)).fetchone()["supersedes_id"]:
+        head = p
+    ids = []
+    while head:
+        ids.append(head)
+        head = con.execute("SELECT superseded_by_id FROM documents WHERE id=?", (head,)).fetchone()["superseded_by_id"]
+    return ids
+
+
+def older_slot(con, chain: list, doc_date: str) -> int:
+    """Where an older copy goes in the chain: before the first version dated after it, otherwise just
+    below the current version. Undated copies go to the bottom. The current version always stays last."""
+    if not doc_date:
+        return 0
+    for k, i in enumerate(chain[:-1]):
+        d = con.execute("SELECT doc_date FROM documents WHERE id=?", (i,)).fetchone()["doc_date"]
+        if d and d > doc_date:
+            return k
+    return len(chain) - 1
+
+
 def doc_out(con, r) -> dict:
     d = {k: r[k] for k in FIELDS}
     d["version"] = version_of(con, r["id"])
@@ -194,19 +234,75 @@ def doc_path(r) -> Path:
 def index_doc(con, i: int):
     r = con.execute(BASE_SQL + " WHERE d.id=?", (i,)).fetchone()
     con.execute("DELETE FROM docs_fts WHERE rowid=?", (i,))
-    con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member,visa_type,visa_country) "
-                "VALUES(?,?,?,?,?,?,?,?,?)",
+    con.execute("INSERT INTO docs_fts(rowid,title,filename,tags,notes,content,member,visa_type,visa_country,provider) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (i, r["title"], r["filename"], r["tags"], r["notes"], r["content"], r["member"] or "",
-                 r["visa_type"] or "", r["visa_country"] or ""))
+                 r["visa_type"] or "", r["visa_country"] or "", r["provider"] or ""))
+
+
+# ---------- background text extraction ----------
+# One worker, so several big scans are OCR'd one after another rather than all at once.
+# Uploads are searchable by title/tags straight away; contents follow once indexed=1.
+_extract_q: "queue.Queue[int]" = queue.Queue()
+_extract_worker: Optional[threading.Thread] = None
+_extract_lock = threading.Lock()
+
+
+def queue_extract(i: int):
+    global _extract_worker
+    _extract_q.put(i)
+    with _extract_lock:
+        if not (_extract_worker and _extract_worker.is_alive()):
+            _extract_worker = threading.Thread(target=_extract_loop, name="extract", daemon=True)
+            _extract_worker.start()
+
+
+def _extract_loop():
+    while True:
+        i = _extract_q.get()
+        try:
+            con = db()
+            try:
+                r = con.execute("SELECT stored_path FROM documents WHERE id=? AND indexed=0", (i,)).fetchone()
+            finally:
+                con.close()
+            if not r:
+                continue  # deleted meanwhile, or already done
+            text = extract_text(DATA / r["stored_path"])  # slow; no database connection held
+            con = db()
+            try:
+                if con.execute("UPDATE documents SET content=?, indexed=1 WHERE id=?", (text, i)).rowcount:
+                    index_doc(con, i)
+                con.commit()
+            finally:
+                con.close()
+        except Exception as e:  # keep the worker alive; the document stays indexed=0 and is retried on restart
+            print(f"text extraction failed for document {i}: {e!r}", flush=True)
+
+
+def queue_pending():
+    """Re-queue documents whose extraction was interrupted (e.g. a restart mid-OCR)."""
+    con = db()
+    try:
+        pending = [r["id"] for r in con.execute("SELECT id FROM documents WHERE indexed=0 ORDER BY id")]
+    finally:
+        con.close()
+    for i in pending:
+        queue_extract(i)
+
+
+queue_pending()
 
 
 def cat_id(con, name: Optional[str]) -> Optional[int]:
-    name = (name or "").strip()
+    name = cat_path(name)
     if not name:
         return None
     r = con.execute("SELECT id FROM categories WHERE name=? COLLATE NOCASE", (name,)).fetchone()
     if r:
         return r["id"]
+    if SUB in name:
+        cat_id(con, name.split(SUB)[0])  # a subcategory's parent always exists
     return con.execute("INSERT INTO categories(name) VALUES(?)", (name,)).lastrowid
 
 
@@ -229,20 +325,41 @@ def member_filter(member: str, where: list, args: list):
         args.append(member)
 
 
+def cat_path(name: Optional[str]) -> str:
+    """Normalise a category name: "Vehicle / Insurance", "Vehicle > Insurance" -> "Vehicle › Insurance"."""
+    parts = [p.strip() for p in re.split(r"[/>›]", name or "") if p.strip()]
+    if len(parts) > 2:
+        raise HTTPException(400, "Subcategories go one level deep, e.g. Vehicle / Insurance")
+    return SUB.join(parts)
+
+
+def cat_rule(category: Optional[str], names) -> Optional[str]:
+    """Which of the rule categories `names` a category falls under: its own (subcategory) name first,
+    then its parent's. So "Vehicle › Insurance" follows the Insurance rules, and
+    "Visa & Immigration › Residence" the Visa & Immigration ones."""
+    by_lower = {n.lower(): n for n in names}
+    for part in reversed([p.strip().lower() for p in re.split(r"[/>›]", category or "") if p.strip()]):
+        if part in by_lower:
+            return by_lower[part]
+    return None
+
+
 def needs_expiry(category: Optional[str], *texts) -> bool:
-    if (category or "").strip().lower() in (c.lower() for c in EXPIRY_REQUIRED_CATEGORIES):
+    if cat_rule(category, BULK_CATEGORIES):
+        return False  # filed without further classification
+    if cat_rule(category, EXPIRY_REQUIRED_CATEGORIES):
         return True
     s = re.sub(r"[_\-.]+", " ", " ".join(t or "" for t in texts).lower())
     return bool(_EXPIRY_RE.search(s))
 
 
 def has_visa_type(category: Optional[str]) -> bool:
-    return (category or "").strip().lower() in (c.lower() for c in VISA_TYPE_CATEGORIES)
+    return bool(cat_rule(category, VISA_TYPE_CATEGORIES))
 
 
 def type_label(category: Optional[str]) -> str:
-    key = (category or "").strip().lower()
-    return next((label for c, (label, _) in PERMIT_CATEGORIES.items() if c.lower() == key), "Type")
+    rule = cat_rule(category, PERMIT_CATEGORIES)
+    return PERMIT_CATEGORIES[rule][0] if rule else "Type"
 
 
 def clean_visa_field(category: Optional[str], v: Optional[str], label: str) -> str:
@@ -252,6 +369,20 @@ def clean_visa_field(category: Optional[str], v: Optional[str], label: str) -> s
     v = (v or "").strip()[:60]
     if not v:
         raise HTTPException(400, f"{label} is required for {category.strip()} documents")
+    return v
+
+
+def has_provider(category: Optional[str]) -> bool:
+    return bool(cat_rule(category, PROVIDER_CATEGORIES))
+
+
+def clean_provider(category: Optional[str], v: Optional[str], required: bool = True) -> str:
+    """Provider (insurer): required on current documents in PROVIDER_CATEGORIES; not kept on other documents."""
+    if not has_provider(category):
+        return ""
+    v = re.sub(r"\s+", " ", (v or "").strip())[:80]
+    if required and not v:
+        raise HTTPException(400, f"Provider is required for {category.strip()} documents")
     return v
 
 
@@ -284,10 +415,10 @@ def expiry_from_validity(issue: str, validity: str) -> str:
 
 
 def can_ack(category: Optional[str]) -> bool:
-    return (category or "").strip().lower() in (c.lower() for c in EXPIRY_ACK_CATEGORIES)
+    return bool(cat_rule(category, EXPIRY_ACK_CATEGORIES))
 
 
-def clean_expiry(v: Optional[str], required: bool = False) -> str:
+def clean_expiry(v: Optional[str], required: bool = False, full: bool = False) -> str:
     """Expiry is YYYY-MM-DD, or YYYY-MM (month/year only) for documents that do not require a full date."""
     v = (v or "").strip()
     if v:
@@ -300,7 +431,7 @@ def clean_expiry(v: Optional[str], required: bool = False) -> str:
                 raise ValueError
         except ValueError:
             raise HTTPException(400, "Expiry must be a date (YYYY-MM-DD) or a month (YYYY-MM)")
-    if required and len(v) != 10:
+    if (required or (full and v)) and len(v) != 10:
         raise HTTPException(400, "This document needs a full expiry date (day, month and year)")
     return v
 
@@ -418,18 +549,21 @@ def summary(member: str = ""):
 def expiry_rules():
     con = db()
     def with_used(base, col, category=None):  # suggestions plus any value already typed in
-        seen = {t.lower() for t in base}
-        sql = (f"SELECT DISTINCT d.{col} FROM documents d LEFT JOIN categories c ON c.id=d.category_id "
-               f"WHERE d.{col}!=''" + (" AND c.name=? COLLATE NOCASE" if category else "") +
-               f" ORDER BY d.{col} COLLATE NOCASE")
-        used = [r[0] for r in con.execute(sql, (category,) if category else ())]
-        return base + [t for t in used if t.lower() not in seen]
+        seen, used = {t.lower() for t in base}, []
+        for r in con.execute(f"SELECT DISTINCT c.name, d.{col} FROM documents d LEFT JOIN categories c "
+                             f"ON c.id=d.category_id WHERE d.{col}!='' ORDER BY d.{col} COLLATE NOCASE"):
+            if (not category or cat_rule(r[0], [category])) and r[1].lower() not in seen:
+                seen.add(r[1].lower())
+                used.append(r[1])
+        return base + used
     try:
         return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES,
                 "ack_categories": EXPIRY_ACK_CATEGORIES, "visa_categories": VISA_TYPE_CATEGORIES,
                 "type_fields": {c.lower(): {"label": label, "options": with_used(opts, "visa_type", c)}
                                 for c, (label, opts) in PERMIT_CATEGORIES.items()},
-                "countries": with_used(COUNTRIES, "visa_country")}
+                "countries": with_used(COUNTRIES, "visa_country"),
+                "provider_categories": PROVIDER_CATEGORIES, "providers": with_used([], "provider"),
+                "bulk_categories": BULK_CATEGORIES}
     finally:
         con.close()
 
@@ -462,6 +596,54 @@ def expiring(member: str = ""):
         con.close()
     for k, v in out.items():
         v.sort(key=(lambda d: d["title"].lower()) if k == "missing" else (lambda d: d["days_left"]))
+    return out
+
+
+FILE_TYPES = [("PDF", {".pdf"}), ("Images", IMG_EXT | {".heic", ".heif"}),
+              ("Word & text", {".doc", ".docx", ".odt", ".rtf", ".txt", ".md"}),
+              ("Spreadsheets", {".xls", ".xlsx", ".xlsm", ".ods", ".csv", ".tsv"})]
+
+
+@app.get("/api/stats")
+def stats(member: str = ""):
+    """Dashboard statistics. Counts are of current documents; storage includes kept (superseded) versions."""
+    where, args = [], []
+    member_filter(member, where, args)
+    cond = " WHERE " + " AND ".join(where) if where else ""
+    con = db()
+    try:
+        rows = con.execute("SELECT d.status, d.size, d.filename, d.indexed, substr(d.created_at,1,7) AS month, "
+                           "m.name AS member FROM documents d LEFT JOIN members m ON m.id=d.member_id" + cond,
+                           args).fetchall()
+    finally:
+        con.close()
+    today = date.today()
+    months = [add_months(today.replace(day=1), -k).strftime("%Y-%m") for k in range(11, -1, -1)]
+    per_month = dict.fromkeys(months, 0)
+    types = {label: {"label": label, "count": 0, "bytes": 0} for label, _ in FILE_TYPES + [("Other", set())]}
+    people = {}
+    out = {"documents": 0, "superseded": 0, "bytes": 0, "pending_index": 0}
+    for r in rows:
+        size = r["size"] or 0
+        out["bytes"] += size
+        who = people.setdefault(r["member"] or "Shared", {"name": r["member"] or "Shared", "count": 0, "bytes": 0})
+        who["bytes"] += size
+        if r["status"] != "current":
+            out["superseded"] += 1
+            continue
+        out["documents"] += 1
+        out["pending_index"] += not r["indexed"]
+        who["count"] += 1
+        if r["month"] in per_month:
+            per_month[r["month"]] += 1
+        ext = Path(r["filename"]).suffix.lower()
+        t = types[next((label for label, exts in FILE_TYPES if ext in exts), "Other")]
+        t["count"] += 1
+        t["bytes"] += size
+    out["months"] = [{"month": k, "count": v} for k, v in per_month.items()]
+    out["this_month"], out["last_month"] = per_month[months[-1]], per_month[months[-2]]
+    out["types"] = sorted((t for t in types.values() if t["count"]), key=lambda t: -t["count"])
+    out["people"] = sorted(people.values(), key=lambda p: -p["bytes"])
     return out
 
 
@@ -543,17 +725,32 @@ def add_category(b: NameBody):
             raise HTTPException(400, "Name required")
         i = cat_id(con, b.name)
         con.commit()
-        return {"id": i, "name": b.name.strip()}
+        return {"id": i, "name": cat_path(b.name)}
     finally:
         con.close()
 
 
 @app.put("/api/categories/{cid}")
 def rename_category(cid: int, b: NameBody):
+    """Renaming a category renames its subcategories with it; "Car / Insurance" moves a subcategory."""
     con = db()
     try:
+        r = con.execute("SELECT name FROM categories WHERE id=?", (cid,)).fetchone()
+        new = cat_path(b.name)
+        if not r:
+            raise HTTPException(404, "Category not found")
+        if not new:
+            raise HTTPException(400, "Name required")
+        old, n = r["name"], len(r["name"] + SUB)
+        has_subs = con.execute("SELECT 1 FROM categories WHERE substr(name,1,?)=?", (n, old + SUB)).fetchone()
+        if SUB in new and has_subs:
+            raise HTTPException(400, "A category with subcategories cannot become a subcategory itself")
         try:
-            con.execute("UPDATE categories SET name=? WHERE id=?", (b.name.strip(), cid))
+            if SUB in new:
+                cat_id(con, new.split(SUB)[0])
+            con.execute("UPDATE categories SET name=? WHERE id=?", (new, cid))
+            con.execute("UPDATE categories SET name=? || substr(name,?) WHERE substr(name,1,?)=?",
+                        (new + SUB, n + 1, n, old + SUB))
         except sqlite3.IntegrityError:
             raise HTTPException(409, "A category with that name exists")
         con.commit()
@@ -568,6 +765,10 @@ def delete_category(cid: int):
     try:
         if con.execute("SELECT 1 FROM documents WHERE category_id=? LIMIT 1", (cid,)).fetchone():
             raise HTTPException(409, "Category still has documents (including superseded ones)")
+        r = con.execute("SELECT name FROM categories WHERE id=?", (cid,)).fetchone()
+        if r and con.execute("SELECT 1 FROM categories WHERE substr(name,1,?)=?",
+                             (len(r["name"] + SUB), r["name"] + SUB)).fetchone():
+            raise HTTPException(409, "Delete or move its subcategories first")
         con.execute("DELETE FROM categories WHERE id=?", (cid,))
         con.commit()
         return {"ok": True}
@@ -584,9 +785,10 @@ def list_documents(q: str = "", category: str = "", member: str = "", include_su
         where, args = [], []
         if category == NO_CAT:
             where.append("d.category_id IS NULL")
-        elif category:
-            where.append("c.name=?")
-            args.append(category)
+        elif category:  # a category includes its subcategories
+            name = cat_path(category)
+            where.append("(c.name=? COLLATE NOCASE OR substr(c.name,1,?)=? COLLATE NOCASE)")
+            args += [name, len(name + SUB), name + SUB]
         member_filter(member, where, args)
         if not include_superseded:
             where.append("d.status='current'")
@@ -599,7 +801,7 @@ def list_documents(q: str = "", category: str = "", member: str = "", include_su
             a = [HL_S, HL_E, fq] + args
             if where:
                 sql += " AND " + " AND ".join(where)
-            sql += " ORDER BY bm25(docs_fts,10,5,5,3,1,8,8,8) LIMIT ?"
+            sql += " ORDER BY bm25(docs_fts,10,5,5,3,1,8,8,8,8) LIMIT ?"
         else:
             sql = BASE_SQL + (" WHERE " + " AND ".join(where) if where else "") + \
                   " ORDER BY d.created_at DESC, d.id DESC LIMIT ?"
@@ -622,9 +824,11 @@ def upload_document(
     visa_type: str = Form(""),
     visa_country: str = Form(""),
     visa_validity: str = Form(""),
+    provider: str = Form(""),
     notes: str = Form(""),
     tags: str = Form(""),
     supersedes_id: Optional[int] = Form(None),
+    older_copy_of: Optional[int] = Form(None),  # any version of a document: file this into its history
     force: bool = Form(False),
 ):
     con = db()
@@ -658,46 +862,67 @@ def upload_document(
                 return JSONResponse(status_code=409, content={
                     "detail": "This exact file is already in the vault",
                     "duplicate": {"id": dup["id"], "title": dup["title"], "status": dup["status"]}})
-        old = None
+        old, chain = None, None
+        if supersedes_id and older_copy_of:
+            raise HTTPException(400, "Upload either a new version or an older copy, not both")
         if supersedes_id:
             old = get_row(con, supersedes_id)
             if old["status"] != "current":
                 raise HTTPException(400, "Only the current version can be superseded")
+        elif older_copy_of:
+            get_row(con, older_copy_of)
+            chain = chain_ids(con, older_copy_of)
+            old = get_row(con, chain[-1])  # defaults come from the current version
         title = title.strip() or (old["title"] if old else Path(fname).stem)
         cid = cat_id(con, category) if category.strip() else (old["category_id"] if old else None)
         mid = member_id(con, member) if member is not None else (old["member_id"] if old else None)
-        cat_name = category.strip() or (old["category"] if old else "")
+        cat_name = cat_path(category) or (old["category"] if old else "")
         visa_validity = clean_validity(cat_name, visa_validity.strip() or (old["visa_validity"] if old else ""))
         if not expiry_date.strip() and visa_validity:
             expiry_date = expiry_from_validity(doc_date, visa_validity)
-            if not expiry_date:
+            if not expiry_date and not chain:
                 raise HTTPException(400, "Enter the issue date so the expiry can be calculated from the validity")
-        expiry_date = clean_expiry(expiry_date, needs_expiry(cat_name, title, tags, fname))
-        visa_type = clean_visa_field(cat_name, visa_type.strip() or (old["visa_type"] if old else ""),
-                                     type_label(cat_name))
-        visa_country = clean_visa_field(cat_name, visa_country.strip() or (old["visa_country"] if old else ""),
-                                        "Issuing country")
+        # an older copy is superseded history, which is never forced to carry expiry or type/country
+        full = needs_expiry(cat_name, title, tags, fname)
+        expiry_date = clean_expiry(expiry_date, required=full and not chain, full=full)
+        visa_type = visa_type.strip() or (old["visa_type"] if old else "")
+        visa_country = visa_country.strip() or (old["visa_country"] if old else "")
+        if chain:
+            visa_type = visa_type[:60] if has_visa_type(cat_name) else ""
+            visa_country = visa_country[:60] if has_visa_type(cat_name) else ""
+        else:
+            visa_type = clean_visa_field(cat_name, visa_type, type_label(cat_name))
+            visa_country = clean_visa_field(cat_name, visa_country, "Issuing country")
+        provider = clean_provider(cat_name, provider.strip() or (old["provider"] if old else ""), required=not chain)
         mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         cur = con.execute(
             "INSERT INTO documents(title,category_id,member_id,filename,mime,size,sha256,doc_date,expiry_date,"
-            "expiry_ack,visa_type,visa_country,visa_validity,notes,tags,created_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "expiry_ack,visa_type,visa_country,visa_validity,provider,notes,tags,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (title, cid, mid, fname, mime, size, digest, doc_date.strip(), expiry_date,
-             int(expiry_ack and can_ack(cat_name)), visa_type, visa_country, visa_validity, notes.strip(), tags.strip(),
+             int(expiry_ack and can_ack(cat_name)), visa_type, visa_country, visa_validity, provider, notes.strip(), tags.strip(),
              datetime.now().isoformat(timespec="seconds")))
         i = cur.lastrowid
         dest_dir = FILES / str(i)
         dest_dir.mkdir(parents=True)
         dest = dest_dir / fname
         shutil.move(str(tmp), dest)
-        text = extract_text(dest)
-        con.execute("UPDATE documents SET stored_path=?, content=? WHERE id=?",
-                    (f"files/{i}/{fname}", text, i))
-        if old:
+        # text extraction (OCR of a scan can take minutes) runs in the background, outside this transaction
+        con.execute("UPDATE documents SET stored_path=?, indexed=0 WHERE id=?", (f"files/{i}/{fname}", i))
+        if chain:
+            k = older_slot(con, chain, doc_date.strip())
+            prev, nxt = (chain[k - 1] if k else None), chain[k]
+            con.execute("UPDATE documents SET status='superseded', supersedes_id=?, superseded_by_id=? WHERE id=?",
+                        (prev, nxt, i))
+            con.execute("UPDATE documents SET supersedes_id=? WHERE id=?", (i, nxt))
+            if prev:
+                con.execute("UPDATE documents SET superseded_by_id=? WHERE id=?", (i, prev))
+        elif old:
             con.execute("UPDATE documents SET status='superseded', superseded_by_id=? WHERE id=?", (i, old["id"]))
             con.execute("UPDATE documents SET supersedes_id=? WHERE id=?", (old["id"], i))
         index_doc(con, i)
         con.commit()
+        queue_extract(i)
         return {**doc_out(con, get_row(con, i)), "converted_from": converted_from}
     except Exception:
         con.rollback()
@@ -719,6 +944,7 @@ class DocPatch(BaseModel):
     visa_type: Optional[str] = None
     visa_country: Optional[str] = None
     visa_validity: Optional[str] = None
+    provider: Optional[str] = None
     notes: Optional[str] = None
     tags: Optional[str] = None
 
@@ -757,6 +983,9 @@ def patch_document(i: int, p: DocPatch):
             elif not has_visa_type(r["category"]):
                 v = ""  # superseded history is never forced to gain these fields
             con.execute(f"UPDATE documents SET {col}=? WHERE id=?", ((v or "").strip()[:60], i))
+        provider = clean_provider(r["category"], p.provider if p.provider is not None else r["provider"],
+                                  required=r["status"] == "current")  # superseded history may leave it empty
+        con.execute("UPDATE documents SET provider=? WHERE id=?", (provider, i))
         validity = clean_validity(r["category"], p.visa_validity if p.visa_validity is not None else r["visa_validity"])
         con.execute("UPDATE documents SET visa_validity=? WHERE id=?", (validity, i))
         if not r["expiry_date"] and validity:
@@ -800,18 +1029,7 @@ def document_history(i: int):
     con = db()
     try:
         get_row(con, i)
-        head = i
-        while True:
-            p = con.execute("SELECT supersedes_id FROM documents WHERE id=?", (head,)).fetchone()["supersedes_id"]
-            if not p:
-                break
-            head = p
-        chain, cur = [], head
-        while cur:
-            r = get_row(con, cur)
-            chain.append(doc_out(con, r))
-            cur = r["superseded_by_id"]
-        return chain
+        return [doc_out(con, get_row(con, d)) for d in chain_ids(con, i)]
     finally:
         con.close()
 
@@ -1068,6 +1286,179 @@ def get_export(name: str):
     if p.parent != EXPORTS.resolve() or not p.is_file():
         raise HTTPException(404, "Not found")
     return FileResponse(p, filename=p.name)
+
+
+# ---------- scanning ----------
+# Pages are scanned one at a time into DATA/scans/<session>/01.jpg, 02.jpg, ... and combined into a PDF when
+# done; the browser then uploads that PDF through the normal upload form. Sessions older than a day are removed.
+for _old in SCANS.iterdir():
+    if _old.is_dir() and _old.stat().st_mtime < datetime.now().timestamp() - 86400:
+        shutil.rmtree(_old, ignore_errors=True)
+
+
+def scan_dir(session: str, create: bool = False) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{16}", session or ""):
+        raise HTTPException(400, "Bad scan session")
+    d = SCANS / session
+    if not d.is_dir():
+        if not create:
+            raise HTTPException(404, "Scan session not found (scans are kept for a day)")
+        d.mkdir()
+    return d
+
+
+def scan_pages(d: Path) -> list:
+    return sorted(p.name for p in d.glob("[0-9][0-9].jpg"))
+
+
+def scan_out(session: str, d: Path) -> dict:
+    """Pages, which of them are cropped (an original is kept for Undo), and a version for cache-busting."""
+    pages = scan_pages(d)
+    return {"session": session, "pages": pages,
+            "cropped": [p for p in pages if (d / (p[:2] + ".orig.jpg")).exists()],
+            "v": {p: int((d / p).stat().st_mtime_ns // 1_000_000) for p in pages}}
+
+
+def scan_page_path(session: str, page: str) -> Path:
+    if not re.fullmatch(r"\d{2}\.jpg", page) or not (scan_dir(session) / page).is_file():
+        raise HTTPException(404, "Page not found")
+    return scan_dir(session) / page
+
+
+def content_box(im) -> Optional[tuple]:
+    """Where the document lies on the (white) scanner glass, as fractions (x, y, w, h); None if it fills the page.
+    Works on a small copy: anything clearly darker than the glass, after a median filter drops dust specks."""
+    from PIL import ImageFilter, ImageOps
+    small = ImageOps.grayscale(im)
+    small.thumbnail((500, 500))
+    mask = small.point(lambda v: 255 if v < 215 else 0).filter(ImageFilter.MedianFilter(5))
+    box = mask.getbbox()
+    if not box:
+        return None
+    sw, sh = small.size
+    m = 0.01  # a little margin around the edges found
+    x0, y0 = max(box[0] / sw - m, 0), max(box[1] / sh - m, 0)
+    x1, y1 = min(box[2] / sw + m, 1), min(box[3] / sh + m, 1)
+    if (x1 - x0) * (y1 - y0) > 0.95:
+        return None
+    return round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)
+
+
+class CropReq(BaseModel):
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class ScanReq(BaseModel):
+    session: str = ""
+    color: str = "color"
+    dpi: int = 300
+    paper: str = "A4"
+
+
+@app.get("/api/scanner")
+def scanner_status():
+    return scanner.status()
+
+
+@app.post("/api/scan/pages")
+def scan_add_page(b: ScanReq):
+    """Scan one page from the glass and add it to the session (a new session when none is given)."""
+    session = b.session or secrets.token_hex(8)
+    d = scan_dir(session, create=True)
+    try:
+        page = scanner.scan_page(b.color, b.dpi, b.paper)
+    except scanner.ScannerError as e:
+        raise HTTPException(503, str(e))
+    pages = scan_pages(d)
+    n = int(pages[-1][:2]) + 1 if pages else 1
+    if n > 99:
+        raise HTTPException(400, "A scan can have at most 99 pages")
+    (d / f"{n:02d}.jpg").write_bytes(page)
+    return scan_out(session, d)
+
+
+@app.get("/api/scan/{session}/pdf")
+def scan_pdf(session: str):
+    """All pages of the session as one PDF, at the resolution they were scanned."""
+    from PIL import Image
+    d = scan_dir(session)
+    pages = scan_pages(d)
+    if not pages:
+        raise HTTPException(400, "Scan at least one page first")
+    import io
+    writer = PdfWriter()
+    for p in pages:  # one page at a time, each at its own resolution, so pages scanned at different dpi keep their size
+        buf = io.BytesIO()
+        with Image.open(d / p) as im:
+            im.save(buf, "PDF", resolution=float(im.info.get("dpi", (300,))[0]))
+        writer.append(PdfReader(buf))
+    out = d / "scan.pdf"
+    with open(out, "wb") as f:
+        writer.write(f)
+    return FileResponse(out, media_type="application/pdf", filename="scan.pdf")
+
+
+@app.get("/api/scan/{session}/{page}")
+def scan_page_image(session: str, page: str):
+    return FileResponse(scan_page_path(session, page), media_type="image/jpeg")
+
+
+@app.get("/api/scan/{session}/{page}/autocrop")
+def scan_autocrop(session: str, page: str):
+    """Suggested crop: the document found on the glass (the whole page if nothing stands out)."""
+    from PIL import Image
+    with Image.open(scan_page_path(session, page)) as im:
+        box = content_box(im)
+    x, y, w, h = box or (0, 0, 1, 1)
+    return {"found": bool(box), "x": x, "y": y, "w": w, "h": h}
+
+
+@app.post("/api/scan/{session}/{page}/crop")
+def scan_crop(session: str, page: str, b: CropReq):
+    """Crop a page to the given box (fractions of the page as shown). The first crop keeps the original."""
+    from PIL import Image
+    p = scan_page_path(session, page)
+    x0, y0 = min(max(b.x, 0), 1), min(max(b.y, 0), 1)
+    x1, y1 = min(max(b.x + b.w, 0), 1), min(max(b.y + b.h, 0), 1)
+    if x1 - x0 < 0.02 or y1 - y0 < 0.02:
+        raise HTTPException(400, "The crop area is too small")
+    orig = p.with_name(page[:2] + ".orig.jpg")
+    with Image.open(p) as im:
+        dpi = im.info.get("dpi", (300, 300))
+        W, H = im.size
+        out = im.crop((round(x0 * W), round(y0 * H), round(x1 * W), round(y1 * H)))
+        out.load()
+    if not orig.exists():
+        p.replace(orig)
+    out.save(p, "JPEG", quality=92, dpi=dpi)
+    return scan_out(session, scan_dir(session))
+
+
+@app.post("/api/scan/{session}/{page}/uncrop")
+def scan_uncrop(session: str, page: str):
+    p = scan_page_path(session, page)
+    orig = p.with_name(page[:2] + ".orig.jpg")
+    if orig.exists():
+        orig.replace(p)
+    return scan_out(session, scan_dir(session))
+
+
+@app.delete("/api/scan/{session}/{page}")
+def scan_remove_page(session: str, page: str):
+    d = scan_dir(session)
+    if re.fullmatch(r"\d{2}\.jpg", page):
+        (d / page).unlink(missing_ok=True)
+        (d / (page[:2] + ".orig.jpg")).unlink(missing_ok=True)
+    return scan_out(session, d)
+
+
+@app.delete("/api/scan/{session}")
+def scan_discard(session: str):
+    shutil.rmtree(scan_dir(session), ignore_errors=True)
+    return {"ok": True}
 
 
 @app.get("/api/health")

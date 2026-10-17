@@ -5,31 +5,34 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DocVault</title>
 <style>
-:root{--bg:#fafaf9;--card:#fff;--soft:#f3f3f1;--ink:#18181b;--ink2:#3f3f46;--mute:#71717a;--faint:#a1a1aa;--line:#e7e5e4;--line2:#d6d3d1;
-  --acc:#18181b;--acc-ink:#fff;--hi:#2563eb;--warn:#b45309;--warn-bg:#fef3c7;--ok-bg:#f4f4f5;--mark:#fde68a;--danger:#dc2626;
-  --r:12px;--shadow:0 1px 2px rgba(0,0,0,.04),0 1px 1px rgba(0,0,0,.02)}
-@media (prefers-color-scheme:dark){:root{--bg:#0c0c0e;--card:#141417;--soft:#1c1c20;--ink:#f4f4f5;--ink2:#d4d4d8;--mute:#a1a1aa;--faint:#71717a;--line:#26262b;--line2:#3a3a41;
-  --acc:#f4f4f5;--acc-ink:#0c0c0e;--hi:#60a5fa;--warn:#fbbf24;--warn-bg:#2b2110;--ok-bg:#1c1c20;--mark:#5b4a10;--danger:#f87171;--shadow:none}}
+:root{--bg:#f6f6fb;--card:#fff;--soft:#f0f1f8;--ink:#15162b;--ink2:#3d3f5e;--mute:#6c6f8b;--faint:#9b9db4;--line:#e6e7f1;--line2:#d4d6e6;
+  --acc:#5b4cf0;--acc-ink:#fff;--hi:#4f46e5;--bar:#5b4cf0;--warn:#b45309;--warn-bg:#fef3c7;--ok-bg:#f4f4f5;--mark:#fde68a;--danger:#dc2626;
+  /* category / person hues: the 8-slot colour-blind-checked palette, light steps */
+  --k1:#2a78d6;--k2:#eb6834;--k3:#1baf7a;--k4:#eda100;--k5:#e87ba4;--k6:#008300;--k7:#6250d6;--k8:#e34948;
+  --r:14px;--shadow:0 1px 2px rgba(20,22,60,.05),0 2px 8px rgba(20,22,60,.04)}
+@media (prefers-color-scheme:dark){:root{--bg:#0e0f1c;--card:#161829;--soft:#1e2036;--ink:#eef0ff;--ink2:#cdd0ea;--mute:#9a9dbe;--faint:#6f7393;--line:#272a45;--line2:#383c5e;
+  --acc:#7c74ff;--acc-ink:#fff;--hi:#a5b4fc;--bar:#7c74ff;
+  --k1:#3987e5;--k2:#d95926;--k3:#199e70;--k4:#c98500;--k5:#d55181;--k6:#008300;--k7:#9085e9;--k8:#e66767;--warn:#fbbf24;--warn-bg:#2b2110;--ok-bg:#1c1c20;--mark:#5b4a10;--danger:#f87171;--shadow:none}}
 *{box-sizing:border-box}
 body{margin:0;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
 header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 24px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
-h1::before{content:"";width:18px;height:18px;border-radius:5px;background:var(--ink)}
+h1::before{content:"";width:18px;height:18px;border-radius:5px;background:var(--acc)}
 nav{display:flex;gap:2px}
 nav button{border:0;background:none;color:var(--mute);padding:6px 11px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px}
 nav button:hover{color:var(--ink)}
-nav button.on{background:var(--soft);color:var(--ink);font-weight:550}
+nav button.on{background:color-mix(in srgb,var(--acc) 13%,transparent);color:var(--hi);font-weight:600}
 .spacer{flex:1}
 .active-binder,.viewing{font-size:13px;color:var(--mute);display:flex;gap:6px;align-items:center}
 .active-binder select,.viewing select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 8px;font-size:13px}
 main{max-width:960px;margin:0 auto;padding:28px 24px 80px}
 input,select,textarea,button{font:inherit;color:inherit}
 input[type=text],input[type=search],input[type=number],input[type=date],input[type=month],select,textarea{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
-input:focus,select:focus,textarea:focus{border-color:var(--line2);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 8%,transparent)}
+input:focus,select:focus,textarea:focus{border-color:color-mix(in srgb,var(--acc) 55%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 16%,transparent)}
 button.btn{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 13px;cursor:pointer;transition:border-color .15s,background .15s}
 button.btn:hover{border-color:var(--line2);background:var(--soft)}
-button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:550}
-button.pri:hover{background:var(--acc);opacity:.88}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+button.pri:hover{background:var(--acc);filter:brightness(1.08)}
 button.sm{padding:4px 10px;font-size:13px;border-radius:8px}
 button.danger{color:var(--danger)}
 button:disabled{opacity:.5;cursor:default}
@@ -41,17 +44,22 @@ label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13
 .search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint);pointer-events:none}
 .search input{padding-left:38px}
 /* landing */
-.hero{margin:8px 0 26px}
-.hero h2{font-size:28px;line-height:1.2;letter-spacing:-.025em;font-weight:650;margin:0 0 6px}
+.hero{margin:4px 0 22px;padding:22px 24px;border-radius:18px;background:color-mix(in srgb,var(--acc) 5%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 14%,var(--line))}
+.hero h2{font-size:28px;line-height:1.2;letter-spacing:-.025em;font-weight:680;margin:0 0 4px}
 .hero .sub{color:var(--mute);font-size:14.5px}
 .hero .sub a{color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line2)}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.fact{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;background:var(--card);border:1px solid var(--line);font-size:13px;color:var(--mute)}
+.fact svg{color:var(--faint)}.fact b{font-weight:650;color:var(--ink)}
+.fact.hot{background:color-mix(in srgb,var(--danger) 8%,var(--card));border-color:color-mix(in srgb,var(--danger) 25%,var(--line));color:var(--danger)}
+.fact.hot svg,.fact.hot b{color:var(--danger)}
 #library.is-home .bar{margin-bottom:34px}
 #library.is-home .search input{padding:13px 16px 13px 42px;font-size:16px;border-radius:12px;box-shadow:var(--shadow)}
 #library.is-home .search svg{left:15px}
 #library.is-home #btnUpload{padding:12px 16px;border-radius:12px}
 .home .sec{margin-bottom:34px}
-.home .sh{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
-.home .sh h3{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0}
+.home .sh,.subsec .sh{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
+.home .sh h3,.subsec .sh h3{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0}
 .home .sh .more{margin-left:auto;font-size:13px;color:var(--mute);cursor:pointer;background:none;border:0;padding:0}
 .home .sh .more:hover{color:var(--ink)}
 .people{display:flex;flex-wrap:wrap;gap:8px}
@@ -61,15 +69,24 @@ label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13
 .chip.on .av{background:color-mix(in srgb,var(--acc-ink) 18%,transparent);color:var(--acc-ink)}
 .chip.on .n{color:inherit;opacity:.7}
 .chip .n{color:var(--faint);font-size:12.5px;font-variant-numeric:tabular-nums}
-.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--ink2);font-size:12px;font-weight:600}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--c,var(--faint)) 16%,transparent);color:color-mix(in srgb,var(--c,var(--mute)) 78%,var(--ink));font-size:11.5px;font-weight:650}
+.av.all{background:var(--soft);color:var(--ink2)}
+.av.shared{background:var(--soft);color:var(--ink2)}
+.chip{box-shadow:var(--shadow)}.chip:hover{border-color:color-mix(in srgb,var(--c,var(--acc)) 45%,var(--line))}
 .chip.add{padding:5px 13px;color:var(--mute);border-style:dashed}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-.cell{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:border-color .15s,background .15s;min-width:0}
-.cell:hover{border-color:var(--line2);background:var(--soft)}
+.cell{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;min-width:0;box-shadow:var(--shadow)}
+.cell:hover{border-color:color-mix(in srgb,var(--c,var(--acc)) 35%,var(--line));transform:translateY(-1px);box-shadow:0 4px 12px rgba(20,22,60,.06)}
+.cell.cat{gap:3px}.cell.cat .bub{margin-bottom:8px}.cell.cat .cc{font-size:12.5px}
+.bub{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c);flex:none;transition:background .15s,color .15s}
 .cell .cn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cell .cn{font-weight:550;font-size:14.5px}
 .cell .cc{color:var(--faint);font-size:13px;font-variant-numeric:tabular-nums}
-.cell.fill{cursor:default}.cell.fill:hover{background:var(--card)}
+.cell.fill{cursor:default}.cell.fill:hover{background:var(--card);transform:none;box-shadow:var(--shadow);border-color:var(--line)}
+.cell.fill.over{background:color-mix(in srgb,var(--danger) 4%,var(--card))}
+.cell.fill.due{background:color-mix(in srgb,#f59e0b 6%,var(--card))}
+.cell.fill.soon{background:color-mix(in srgb,var(--acc) 4%,var(--card))}
+.cell.soon .big,.rw .m.soon{color:var(--hi)}
 .cell .big{font-size:24px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2}
 .cell.due .big{color:var(--warn)}.cell.over .big{color:var(--danger)}
 .eg{padding:7px 16px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);background:var(--soft);border-top:1px solid var(--line)}
@@ -87,14 +104,17 @@ label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:13
 .rw:hover{background:var(--soft)}
 .rw .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .rw .m{color:var(--faint);font-size:13px;white-space:nowrap}
-.rw .ic{width:30px;height:30px;border-radius:8px;background:var(--soft);display:grid;place-items:center;color:var(--mute);font-size:10px;font-weight:650;letter-spacing:.02em;flex:none}
+.rw .ic{width:32px;height:32px;border-radius:9px;background:color-mix(in srgb,var(--c,var(--faint)) 14%,transparent);display:grid;place-items:center;color:color-mix(in srgb,var(--c,var(--mute)) 78%,var(--ink));font-size:9.5px;font-weight:750;letter-spacing:.02em;flex:none}
+.rows{box-shadow:var(--shadow)}
 .hint{color:var(--mute);font-size:14px;padding:18px;border:1px dashed var(--line2);border-radius:var(--r);text-align:center}
 .hint a{color:var(--ink);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
-@media(max-width:600px){header{padding:10px 16px;gap:8px 12px}main{padding:20px 16px 60px}.hero h2{font-size:24px}.rw .m.opt{display:none}nav{order:3;width:100%;overflow-x:auto}.spacer{display:none}.viewing,.active-binder{flex:1;min-width:0}.viewing select,.active-binder select{min-width:0;flex:1}.search{flex-basis:100%}#library.is-home .bar{margin-bottom:26px}#btnUpload{margin-left:auto}.grid{grid-template-columns:1fr 1fr}.chip{max-width:100%}.chip .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(max-width:600px){.kpi{flex-direction:column;gap:8px}.kpi .v{font-size:22px;white-space:nowrap}.hero{padding:22px 20px;border-radius:18px}
+  header{padding:10px 16px;gap:8px 12px}main{padding:20px 16px 60px}.hero h2{font-size:24px}.rw .m.opt{display:none}nav{order:3;width:100%;overflow-x:auto}.spacer{display:none}.viewing,.active-binder{flex:1;min-width:0}.viewing select,.active-binder select{min-width:0;flex:1}.search{flex-basis:100%}#library.is-home .bar{margin-bottom:26px}#btnUpload{margin-left:auto}.grid{grid-template-columns:1fr 1fr}.chip{max-width:100%}.chip .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 html,body{overflow-x:hidden}
 /* documents */
-.doc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;transition:border-color .15s}
-.doc:hover{border-color:var(--line2)}
+.doc{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--c,var(--line2));border-radius:var(--r);padding:14px 16px;margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;transition:border-color .15s,box-shadow .15s;box-shadow:var(--shadow)}
+.doc:hover{border-color:var(--line2);border-left-color:var(--c,var(--line2))}
+.badge.cat{background:color-mix(in srgb,var(--c) 14%,transparent);color:color-mix(in srgb,var(--c) 72%,var(--ink))}
 .doc.superseded{opacity:.7;border-style:dashed}
 .doc .main{flex:1;min-width:240px}
 .title{font-weight:550;color:var(--ink);cursor:pointer;text-decoration:none}
@@ -127,6 +147,41 @@ dialog.big iframe{flex:1;border:1px solid var(--line);border-radius:10px;backgro
 .bi:last-child{border:0}.bi .n{width:26px;color:var(--mute)}.bi .t{flex:1}
 .catrow{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .catrow:last-child{border:0}
+.catrow.sub{padding-left:22px}.catrow.sub .t::before{content:'↳ ';color:var(--faint)}
+.subsec{margin:0 0 26px}
+/* statistics: stat tiles + single-series charts in the accent; text stays in ink tokens */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0;display:flex;gap:12px;align-items:flex-start;box-shadow:var(--shadow)}
+.kpi>div{min-width:0}
+.kpi .cc{color:var(--mute);font-size:13px}.kpi .v{font-size:24px;font-weight:650;letter-spacing:-.02em;line-height:1.25}
+.kpi .d{color:var(--faint);font-size:12.5px}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:10px}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 12px;min-width:0;box-shadow:var(--shadow)}
+.chart h4{margin:0;font-size:14px;font-weight:600}.chart .cap{color:var(--faint);font-size:12.5px;margin:0 0 12px}
+.hbars{display:grid;grid-template-columns:minmax(70px,38%) 1fr;gap:9px 10px;align-items:center;font-size:13px}
+.hbars .hl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.hbars .ht{display:flex;align-items:center;gap:6px;min-width:0;outline:none;padding:3px 0}
+.hbars .ht i{display:block;height:10px;background:var(--bar);border-radius:0 4px 4px 0;flex:none}
+.hbars .ht b{font-weight:500;font-size:12.5px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hbars .ht:hover i,.hbars .ht:focus-visible i{filter:brightness(1.15)}
+#tip{position:fixed;z-index:60;pointer-events:none;background:var(--card);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.45;box-shadow:0 6px 18px rgba(0,0,0,.14);max-width:260px;color:var(--mute)}
+#tip strong{display:block;color:var(--ink);font-size:14px;font-weight:650}
+#dlgScan .row{flex-wrap:wrap}#dlgScan .row>*{min-width:130px}
+.thumbs{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 12px;min-height:20px}
+.thumb{position:relative;width:96px}.thumb img{width:96px;height:132px;object-fit:cover;border:1px solid var(--line);border-radius:6px;display:block;background:#fff}
+.thumb img{cursor:pointer}.thumb span{font-size:12px;color:var(--faint)}
+.thumb .rm{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--danger);cursor:pointer;line-height:1;padding:0}
+.thumb .cr{display:block;margin-top:2px;padding:0;border:0;background:none;color:var(--hi);font-size:12.5px;cursor:pointer}
+.cropwrap{position:relative;display:inline-block;max-width:100%;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;line-height:0;cursor:crosshair}
+.cropwrap img{max-width:100%;max-height:62vh;display:block;background:#fff}
+#sCropBox{position:absolute;border:2px solid var(--hi);box-shadow:0 0 0 9999px rgba(0,0,0,.45);cursor:move}
+#sCropBox i{position:absolute;width:18px;height:18px;background:#fff;border:2px solid var(--hi);border-radius:4px}
+#sCropBox i[data-h=nw]{left:-10px;top:-10px;cursor:nwse-resize}#sCropBox i[data-h=ne]{right:-10px;top:-10px;cursor:nesw-resize}
+#sCropBox i[data-h=sw]{left:-10px;bottom:-10px;cursor:nesw-resize}#sCropBox i[data-h=se]{right:-10px;bottom:-10px;cursor:nwse-resize}
+.cell.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}.cell.on .cc{color:inherit;opacity:.8}.cell.on:hover{background:var(--acc)}
+.cell.on .bub,.cell.on:hover .bub{background:rgba(255,255,255,.22);color:#fff}
+.grp{display:flex;align-items:baseline;gap:8px;width:100%;margin:22px 0 8px;padding:0;border:0;background:none;font:inherit;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);text-align:left}
+.subsec+.grp{margin-top:0}button.grp{cursor:pointer}button.grp:hover{color:var(--ink2)}.grp .n{font-weight:500;letter-spacing:0}
 .catrow .t{flex:1}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:50}
 #toast.on{opacity:1}
@@ -162,6 +217,8 @@ a.dl{color:var(--hi)}
     <div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input id="q" type="search" placeholder="Search names, titles, tags and document text…" autofocus></div>
     <label class="chk"><input type="checkbox" id="showOld"> Show superseded</label>
+    <button class="btn" id="btnScan" hidden title="Scan from the network scanner">Scan</button>
+    <button class="btn" id="btnBulk" hidden title="Upload many files at once, each titled by its file name">Bulk upload</button>
     <button class="btn pri" id="btnUpload">+ Upload</button>
   </div>
   <div id="crumb" class="crumb" hidden></div>
@@ -196,7 +253,7 @@ a.dl{color:var(--hi)}
 <section id="categories">
   <div class="panel">
     <div class="bar" style="margin-bottom:6px">
-      <input id="newCat" class="grow" type="text" placeholder="New category name">
+      <input id="newCat" class="grow" type="text" placeholder="New category name (or Vehicle / Insurance for a subcategory)">
       <button class="btn pri" id="btnAddCat">Add category</button>
     </div>
     <div id="catList"></div>
@@ -207,16 +264,18 @@ a.dl{color:var(--hi)}
 <datalist id="catData"></datalist>
 <datalist id="visaData"></datalist>
 <datalist id="countryData"></datalist>
+<datalist id="providerData"></datalist>
 
 <dialog id="dlgDoc">
   <form id="docForm" method="dialog">
     <h3 id="dlgTitle" style="margin-top:0">Upload document</h3>
     <div id="dlgNote" class="note" hidden></div>
-    <div class="f" id="fileRow"><span>File (PDF, Word, Excel, image, text…)</span><input type="file" id="fFile"></div>
+    <div class="f" id="fileRow"><span>File (PDF, Word, Excel, image, text…)</span>
+      <div style="display:flex;gap:8px;align-items:center"><input type="file" id="fFile" style="flex:1;min-width:0"><button type="button" class="btn sm" id="fScan" hidden>Scan…</button></div></div>
     <div class="f"><span>Title</span><input type="text" id="fTitle" placeholder="Defaults to file name"></div>
     <div class="row">
       <div class="f"><span>Belongs to</span><select id="fMember"></select></div>
-      <div class="f"><span>Category (type a new one to create it)</span><input type="text" id="fCat" list="catData"></div>
+      <div class="f"><span>Category (type a new one to create it; “Vehicle / Insurance” for a subcategory)</span><input type="text" id="fCat" list="catData"></div>
     </div>
     <div class="row">
       <div class="f"><span id="fDateLbl">Document date</span><input type="date" id="fDate"></div>
@@ -226,6 +285,7 @@ a.dl{color:var(--hi)}
       <div class="f"><span id="fTypeLbl">Visa type (required)</span><input type="text" id="fVisa" list="visaData" maxlength="60"></div>
       <div class="f"><span>Issuing country (required)</span><input type="text" id="fCountry" list="countryData" maxlength="60" placeholder="e.g. United Arab Emirates"></div>
     </div>
+    <div class="f" id="fProvRow" hidden><span id="fProvLbl">Provider (required)</span><input type="text" id="fProv" list="providerData" maxlength="80" placeholder="e.g. AXA, Oman Insurance"></div>
     <div class="f" id="fValRow" hidden><span>Validity from issue date (fills in the expiry date; optional)</span>
       <div style="display:flex;gap:8px"><input type="number" id="fValN" min="1" max="9999" step="1" placeholder="e.g. 30" style="flex:1">
         <select id="fValU" style="width:auto"><option value="days">days</option><option value="months">months</option></select></div></div>
@@ -237,6 +297,51 @@ a.dl{color:var(--hi)}
       <button type="submit" class="btn pri" id="dlgSave">Save</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="dlgBulk">
+  <form id="bulkForm" method="dialog">
+    <h3 style="margin-top:0">Bulk upload</h3>
+    <div class="note">Each file is filed as it is, titled by its file name. Nothing else is asked; edit any of them later if you want.</div>
+    <div class="f"><span>Belongs to</span><select id="bMember"></select></div>
+    <div class="f"><span>Category</span><select id="bCat"></select></div>
+    <div class="f"><span>Files (choose as many as you like)</span><input type="file" id="bFiles" multiple></div>
+    <div class="meta" id="bStatus" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn" id="bCancel">Cancel</button>
+      <button type="submit" class="btn pri" id="bSave">Upload</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgScan">
+  <h3 style="margin-top:0">Scan</h3>
+  <div id="sMain">
+  <div class="meta" id="sStatus" style="margin-bottom:10px"></div>
+  <div class="row">
+    <div class="f"><span>Colour</span><select id="sColor"><option value="color">Colour</option><option value="gray">Greyscale</option></select></div>
+    <div class="f"><span>Resolution</span><select id="sDpi"></select></div>
+    <div class="f"><span>Paper</span><select id="sPaper"></select></div>
+  </div>
+  <div class="meta">Place a page on the glass, then Scan page. Repeat for each page; they become one PDF.</div>
+  <div class="thumbs" id="sThumbs"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+    <button type="button" class="btn" id="sCancel">Cancel</button>
+    <button type="button" class="btn" id="sGo">Scan page</button>
+    <button type="button" class="btn pri" id="sDone" disabled>Done</button>
+  </div>
+  </div>
+  <div id="sCropPane" hidden>
+    <div style="text-align:center"><div class="cropwrap" id="sCropWrap"><img id="sCropImg" alt="Page to crop" draggable="false">
+      <div id="sCropBox"><i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div></div>
+    <div class="meta" id="sCropHint" style="margin:8px 0 10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="btn" id="sCropBack">Back</button>
+      <button type="button" class="btn" id="sUncrop" hidden title="Put back the page as scanned">Undo crop</button>
+      <button type="button" class="btn" id="sCropAll">Whole page</button>
+      <button type="button" class="btn pri" id="sCropApply">Apply crop</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog id="dlgView" class="big">
@@ -253,15 +358,26 @@ a.dl{color:var(--hi)}
 <dialog id="dlgHist">
   <h3 style="margin-top:0">Version history</h3>
   <div id="histBody"></div>
-  <div style="text-align:right;margin-top:10px"><button class="btn" id="histClose">Close</button></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+    <button class="btn" id="histOlder" title="Add an earlier copy you still have; the current version stays current">Add older copy</button>
+    <button class="btn" id="histClose">Close</button></div>
 </dialog>
 
 <div id="toast"></div>
+<div id="tip" hidden></div>
 
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmtSize=n=>n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+const fmtSize=n=>n>1073741824?(n/1073741824).toFixed(2)+' GB':n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+/* Upload with progress (fetch cannot report upload progress); errors match api(). */
+function uploadForm(fd,onPct){return new Promise((ok,bad)=>{
+  const x=new XMLHttpRequest();x.open('POST','/api/documents');
+  x.upload.onprogress=e=>{if(e.lengthComputable)onPct(Math.round(e.loaded/e.total*100))};
+  x.onload=()=>{let b={};try{b=JSON.parse(x.responseText)}catch{}
+    x.status>=200&&x.status<300?ok(b):bad(Object.assign(new Error(b.detail||x.statusText||'Upload failed'),{status:x.status,body:b}))};
+  x.onerror=()=>bad(new Error('Upload failed: the connection was lost'));
+  x.send(fd)})}
 async function api(url,opts={}){
   const r=await fetch(url,opts);
   if(!r.ok){let b={};try{b=await r.json()}catch{}
@@ -299,18 +415,34 @@ function show(v){
 }
 
 /* ---------- categories ---------- */
+const SUB=' › ';  // subcategory path separator: "Vehicle › Insurance"
+/* Top-level categories with their subcategories; a top-level count includes its subcategories. */
+function topCats(){
+  const m=new Map();
+  for(const c of cats){const[p,leaf]=c.name.split(SUB);
+    const t=m.get(p)||{name:p,id:null,count:0,subs:[]};t.count+=c.count;
+    if(leaf==null)t.id=c.id;else t.subs.push({...c,leaf});m.set(p,t)}
+  return[...m.values()];
+}
 async function loadCats(){
   cats=await api('/api/categories?'+new URLSearchParams({member:curMember}));
   $('#catData').innerHTML=cats.map(c=>`<option value="${esc(c.name)}">`).join('');
-  $('#catList').innerHTML=cats.map(c=>`<div class="catrow"><span class="t">${esc(c.name)} <span class="badge">${c.count}</span></span>
-    <button class="btn sm" data-ren="${c.id}">Rename</button><button class="btn sm danger" data-delcat="${c.id}">Delete</button></div>`).join('');
+  const acts=id=>`<button class="btn sm" data-ren="${id}">Rename</button><button class="btn sm danger" data-delcat="${id}">Delete</button>`;
+  $('#catList').innerHTML=topCats().map(t=>`<div class="catrow"><span class="t">${esc(t.name)} <span class="badge">${t.count}</span></span>
+    <button class="btn sm" data-addsub="${esc(t.name)}">+ Subcategory</button>${t.id?acts(t.id):''}</div>`+
+    t.subs.map(c=>`<div class="catrow sub"><span class="t">${esc(c.leaf)} <span class="badge">${c.count}</span></span>${acts(c.id)}</div>`).join('')).join('');
 }
 $('#btnAddCat').onclick=async()=>{const n=$('#newCat').value.trim();if(!n)return;
   try{await api('/api/categories',jreq('POST',{name:n}));$('#newCat').value='';await loadCats();refreshLibrary();toast('Category added')}catch(e){toast(e.message)}};
 $('#catList').onclick=async e=>{
-  const ren=e.target.dataset.ren,del=e.target.dataset.delcat;
-  if(ren){const c=cats.find(x=>x.id==ren);const n=prompt('Rename category',c.name);
-    if(n&&n.trim()){try{await api('/api/categories/'+ren,jreq('PUT',{name:n}));await loadCats();if(curCat===c.name)openCat(n.trim());else refreshLibrary()}catch(er){toast(er.message)}}}
+  const ren=e.target.dataset.ren,del=e.target.dataset.delcat,addsub=e.target.dataset.addsub;
+  if(addsub){const n=prompt(`New subcategory of ${addsub}`);
+    if(n&&n.trim()){try{await api('/api/categories',jreq('POST',{name:addsub+SUB+n.trim()}));await loadCats();refreshLibrary();toast('Subcategory added')}catch(er){toast(er.message)}}}
+  if(ren){const c=cats.find(x=>x.id==ren),[p,leaf]=c.name.split(SUB);  // a subcategory is renamed by its own name
+    const n=prompt(leaf==null?'Rename category':`Rename subcategory of ${p}`,leaf??c.name);
+    if(n&&n.trim()){const nn=leaf==null?n.trim():p+SUB+n.trim();
+      try{await api('/api/categories/'+ren,jreq('PUT',{name:nn}));await loadCats();
+        if(curCat===c.name||curCat?.startsWith(c.name+SUB))openCat(nn+curCat.slice(c.name.length));else refreshLibrary()}catch(er){toast(er.message)}}}
   if(del&&confirm('Delete this category?')){try{await api('/api/categories/'+del,{method:'DELETE'});await loadCats();refreshLibrary()}catch(er){toast(er.message)}}
 };
 
@@ -356,19 +488,38 @@ window.onhashchange=()=>{curCat=catFromHash();show('library')};
 let qT,libSeq=0;  // libSeq: only the newest library render may write to the page
 $('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(refreshLibrary,250)};
 $('#showOld').onchange=refreshLibrary;
+/* A parent category lists its documents under one heading per subcategory (in the same order as the tiles),
+   then the ones filed directly under the parent. Headings open the subcategory. */
+function groupedDocs(t,docs){
+  const groups=[...t.subs.map(c=>({name:c.name,label:c.leaf,docs:[]})),{name:null,label:'Not in a subcategory',docs:[]}];
+  for(const d of docs)(groups.find(g=>g.name&&g.name.toLowerCase()===(d.category||'').toLowerCase())||groups.at(-1)).docs.push(d);
+  return groups.filter(g=>g.docs.length).map(g=>(g.name?`<button class="grp" data-cat="${esc(g.name)}">`:'<div class="grp">')+
+    `${esc(g.label)} <span class="n">${g.docs.length}</span>${g.name?'</button>':'</div>'}`+g.docs.map(docHtml).join('')).join('');
+}
 async function refreshLibrary(){
   const seq=++libSeq,q=$('#q').value.trim();
+  $('#btnBulk').hidden=!(curCat&&isBulk(curCat));
   if(curCat==null&&!q)return renderHome(seq);
   $('#home').innerHTML='';setHomeMode(false);
   const crumb=$('#crumb');crumb.hidden=false;
-  crumb.innerHTML=`<a data-home>← Library</a><span class="meta">/</span><strong>${curCat==null?'Search results':esc(catLabel(curCat))}</strong>`+
+  const[top,leaf]=(curCat??'').split(SUB);
+  crumb.innerHTML=`<a data-home>← Library</a><span class="meta">/</span>`+
+    (leaf!=null?`<a data-cat="${esc(top)}">${esc(top)}</a><span class="meta">/</span><strong>${esc(leaf)}</strong>`
+      :`<strong>${curCat==null?'Search results':esc(catLabel(curCat))}</strong>`)+
     (curMember?`<span class="badge who">${esc(whoLabel(curMember))}</span>`:'')+
     (curCat!=null&&q?'<span class="meta">· matching search</span>':'');
   const p=new URLSearchParams({q,category:curCat??'',member:curMember,include_superseded:$('#showOld').checked});
   const docs=await api('/api/documents?'+p);
   if(seq!==libSeq)return;
   docsById={};docs.forEach(d=>docsById[d.id]=d);
-  $('#docs').innerHTML=docs.length?docs.map(docHtml).join(''):`<div class="empty">${q?'No documents found.':'No documents in this category yet'+(curMember?' for '+esc(whoLabel(curMember)):'')+'.'}</div>`;
+  // subcategory tiles, laid out like the dashboard's categories; the open one is highlighted and clicking it goes back up
+  const t=curCat==null?null:topCats().find(x=>x.name===top);
+  const full=t?t.subs.filter(c=>c.count||c.name===curCat):[],empty=t?t.subs.filter(c=>!c.count&&c.name!==curCat):[];
+  const subs=t?.subs.length?'<div class="subsec"><div class="sh"><h3>Subcategories</h3></div>'+
+    (full.length?'<div class="grid">'+full.map(c=>{const on=c.name===curCat;
+      return `<button class="cell cat${on?' on':''}" data-cat="${esc(on?t.name:c.name)}" ${catStyle(c.name)}${on?` title="Back to all of ${esc(t.name)}"`:''}>${catBubble(c.name)}<span class="cn">${esc(c.leaf)}</span><span class="cc">${plural(c.count,'document')}</span></button>`}).join('')+'</div>':'')+
+    (empty.length?'<div class="empties">Empty: '+empty.map(c=>`<button data-cat="${esc(c.name)}">${esc(c.leaf)}</button>`).join(' · ')+'</div>':'')+'</div>':'';
+  $('#docs').innerHTML=subs+(docs.length?(leaf==null&&t?.subs.length?groupedDocs(t,docs):docs.map(docHtml).join('')):`<div class="empty">${q?'No documents found.':'No documents in this category yet'+(curMember?' for '+esc(whoLabel(curMember)):'')+'.'}</div>`);
 }
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -376,10 +527,10 @@ const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join(''
 /* Passports, leases, rental/service contracts and permit categories (Visa & Immigration, Drivers License)
    need a full expiry date;
    others may have month/year. */
-let expRe=null,expCats=[],ackCats=[],visaCats=[],typeFields={};
-/* Badge for permits: "Golden visa · United Arab Emirates · 24 months", "Light vehicle · United Arab Emirates" */
-const visaLabel=d=>{const isVisa=(d.category||'').trim().toLowerCase()==='visa & immigration';
-  return[d.visa_type&&(!isVisa||/\bvisa$/i.test(d.visa_type)?d.visa_type:d.visa_type+' visa'),d.visa_country,d.visa_validity].filter(Boolean).join(' · ')};
+let expRe=null,expCats=[],ackCats=[],visaCats=[],provCats=[],bulkCats=[],typeFields={};
+/* Badge for permits: "Golden visa · United Arab Emirates · 24 months", "Light vehicle · United Arab Emirates"; insurance: its provider */
+const visaLabel=d=>{const isVisa=catRule(d.category,['visa & immigration']);
+  return[d.visa_type&&(!isVisa||/\bvisa$/i.test(d.visa_type)?d.visa_type:d.visa_type+' visa'),d.visa_country,d.visa_validity,d.provider].filter(Boolean).join(' · ')};
 /* Last valid day of a visa: the issue date counts as day 1 (24 months from 2026-01-15 -> 2028-01-14). */
 function expiryFromValidity(iso,n,unit){
   const[y,m,d]=iso.split('-').map(Number);let e;
@@ -388,15 +539,20 @@ function expiryFromValidity(iso,n,unit){
   else e=new Date(Date.UTC(y,m-1,d+n));
   e.setUTCDate(e.getUTCDate()-1);return e.toISOString().slice(0,10);
 }
-const hasVisaType=cat=>visaCats.includes((cat||'').trim().toLowerCase());
-const canAck=cat=>ackCats.includes((cat||'').trim().toLowerCase());
-const needsExpiry=(cat,...t)=>expCats.includes((cat||'').trim().toLowerCase())||
-  !!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' '));
+/* Rule category a (sub)category falls under: its own name first, then its parent's (as cat_rule in main.py). */
+const catRule=(cat,list)=>(cat||'').split(/[\/>›]/).map(p=>p.trim().toLowerCase()).filter(Boolean).reverse().find(p=>list.includes(p));
+const hasVisaType=cat=>!!catRule(cat,visaCats);
+const hasProvider=cat=>!!catRule(cat,provCats);
+const canAck=cat=>!!catRule(cat,ackCats);
+const isBulk=cat=>!!catRule(cat,bulkCats);
+const needsExpiry=(cat,...t)=>!isBulk(cat)&&(!!catRule(cat,expCats)||  // bulk categories: never
+  !!expRe&&expRe.test(t.join(' ').toLowerCase().replace(/[_\-.]+/g,' ')));
 async function loadExpiryRules(){
   const r=await api('/api/expiry-rules');
   expCats=r.categories.map(c=>c.toLowerCase());ackCats=r.ack_categories.map(c=>c.toLowerCase());
   visaCats=r.visa_categories.map(c=>c.toLowerCase());
-  typeFields=r.type_fields;
+  typeFields=r.type_fields;provCats=r.provider_categories.map(c=>c.toLowerCase());bulkCats=r.bulk_categories.map(c=>c.toLowerCase());
+  $('#providerData').innerHTML=r.providers.map(t=>`<option value="${esc(t)}">`).join('');
   $('#countryData').innerHTML=r.countries.map(t=>`<option value="${esc(t)}">`).join('');
   expRe=new RegExp('\\b(?:'+r.required.map(k=>k.replace(/ /g,'\\s+')).join('|')+')s?\\b');
 }
@@ -410,17 +566,59 @@ function expBadge(d){
   if(!d.expiry_date)return d.status==='current'&&needsExpiry(d.category,d.title,d.tags,d.filename)?'<span class="badge old">No expiry date</span>':'';
   const n=daysLeft(d.expiry_date);
   if(n<0&&d.expiry_ack&&canAck(d.category))return `<span class="badge" title="Acknowledged as expired">Expired ${esc(d.expiry_date)} · acknowledged</span>`;
-  return `<span class="badge ${n<0?'exp':n<=183?'old':''}" title="${esc(relDays(n))}">${n<0?'Expired':'Expires'} ${esc(d.expiry_date)}</span>`;
+  const e=expiryEnd(d.expiry_date),t=new Date();t.setHours(0,0,0,0);  // same windows as Expiring soon: red within 1 month, amber within 6
+  const at=m=>new Date(t.getFullYear(),t.getMonth()+m,Math.min(t.getDate(),new Date(t.getFullYear(),t.getMonth()+m+1,0).getDate()));
+  return `<span class="badge ${n<0||e<=at(1)?'exp':e<=at(6)?'old':''}" title="${esc(relDays(n))}">${n<0?'Expired':'Expires'} ${esc(d.expiry_date)}</span>`;
 }
+/* ---------- statistics ---------- */
+let tips=[];  // tooltip contents for the marks currently on the page, by index (rendered with textContent)
+const tipAttr=(value,label,lines=[])=>`data-tip="${tips.push({value,label,lines})-1}" tabindex="0"`;
+function renderStats(st){
+  tips=[];
+  const kpi=(label,value,d,ic,k)=>`<div class="kpi">${bubble(ic,k)}<div><div class="cc">${label}</div><div class="v">${value}</div><div class="d">${d}</div></div></div>`;
+  let h='<div class="sec"><div class="sh"><h3>Statistics</h3></div><div class="kpis">'+
+    kpi('Documents',st.documents.toLocaleString(),st.this_month?`${st.this_month} added this month`:'none added this month','doc',1)+
+    kpi('Older versions kept',st.superseded.toLocaleString(),'in version history','layers',7)+
+    kpi('Storage used',fmtSize(st.bytes),'including history','disk',3)+
+    kpi('Searchable',`${(st.documents-st.pending_index).toLocaleString()} of ${st.documents.toLocaleString()}`,
+      st.pending_index?`${st.pending_index} still being indexed`:'all contents indexed','search',6)+'</div><div class="charts">';
+  // horizontal bars: value at the tip; the longest bar leaves room for its value so nothing is clipped
+  const hbars=(rows,label,val,fmt,tip)=>{const mx=Math.max(...rows.map(val),1);
+    return '<div class="hbars">'+rows.map(r=>`<span class="hl">${esc(label(r))}</span><span class="ht" ${tip(r)}>`+
+      `<i style="width:calc((100% - 70px)*${(val(r)/mx).toFixed(4)})"></i><b>${fmt(r)}</b></span>`).join('')+'</div>'};
+  // first names when they are all different ("Sathish"), full names otherwise; the tooltip always has the full name
+  const first=n=>n.split(/\s+/)[0],firsts=st.people.map(r=>first(r.name));
+  const short=new Set(firsts).size===firsts.length?r=>first(r.name):r=>r.name;
+  if(st.people.length>1)h+='<div class="chart"><h4>Storage by person</h4><div class="cap">Including older versions</div>'+
+    hbars(st.people,short,r=>r.bytes,r=>fmtSize(r.bytes),r=>tipAttr(fmtSize(r.bytes),r.name,[plural(r.count,'current document')]))+'</div>';
+  if(st.types.length)h+='<div class="chart"><h4>File types</h4><div class="cap">Current documents</div>'+
+    hbars(st.types,r=>r.label,r=>r.count,r=>r.count.toLocaleString(),r=>tipAttr(plural(r.count,'document'),r.label,[fmtSize(r.bytes)]))+'</div>';
+  return h+'</div></div>';
+}
+function showTip(el){
+  const t=tips[el.dataset.tip];if(!t)return;const tip=$('#tip');tip.replaceChildren();
+  const v=document.createElement('strong');v.textContent=t.value;tip.append(v,document.createTextNode(t.label));
+  for(const l of t.lines){const d=document.createElement('div');d.textContent=l;tip.append(d)}
+  tip.hidden=false;const r=el.getBoundingClientRect(),w=tip.offsetWidth,hh=tip.offsetHeight;
+  tip.style.left=Math.min(Math.max(r.left+r.width/2-w/2,8),innerWidth-w-8)+'px';
+  tip.style.top=(r.top-hh-8<8?r.bottom+8:r.top-hh-8)+'px';
+}
+const hideTip=()=>$('#tip').hidden=true;
+$('#home').addEventListener('pointerover',e=>{const el=e.target.closest('[data-tip]');el?showTip(el):hideTip()});
+$('#home').addEventListener('pointerleave',hideTip);
+$('#home').addEventListener('focusin',e=>{const el=e.target.closest('[data-tip]');if(el)showTip(el)});
+$('#home').addEventListener('focusout',hideTip);
+addEventListener('scroll',hideTip,{passive:true});
+
 function renderExpiring(ex){
   // Separate windows: each document is counted and listed in exactly one of them.
-  const groups=[['expired','Expired','over'],['month1','Within 1 month','over'],['month3','In 1–3 months','due'],['month6','In 3–6 months','']];
+  const groups=[['expired','Expired','over'],['month1','Within 1 month','over'],['month3','In 1–3 months','due'],['month6','In 3–6 months','soon']];
   let h='<div class="sec"><div class="sh"><h3>Expiring soon</h3></div><div class="grid">'+groups.map(([k,label,cls])=>
     `<div class="cell fill ${ex[k].length?cls:''}"><span class="cc">${label}</span><span class="big">${ex[k].length}</span></div>`).join('')+'</div>';
   const rows=groups.filter(([k])=>ex[k].length).map(([k,label,cls])=>`<div class="eg">${label}</div>`+ex[k].map(d=>
-    `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
-    (visaLabel(d)?`<span class="m">${esc(visaLabel(d))}</span>`:'')+
-    (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
+    `<div class="rw" data-doc="${d.id}">${extIc(d)}<span class="t">${esc(d.title)}</span>`+
+    (visaLabel(d)?`<span class="m opt">${esc(visaLabel(d))}</span>`:'')+
+    (curMember?'':`<span class="m opt">${esc(d.member||'Shared')}</span>`)+
     `<span class="m opt">${esc(d.expiry_date)}</span><span class="m ${cls}">${esc(relDays(d.days_left))}</span>`+
     `<button class="lnk" data-newver="${d.id}" title="Upload the renewed document; this one is kept in history">New version</button>`+
     (k==='expired'&&canAck(d.category)?`<label class="ack" title="Hide from the Expired list"><input type="checkbox" data-ack="${d.id}"> Acknowledge</label>`:'')+
@@ -431,14 +629,71 @@ function renderExpiring(ex){
   return h+'</div>';
 }
 const extOf=f=>((f||'').split('.').pop()||'').slice(0,4).toUpperCase();
+/* ---------- colour & icons ----------
+   Each category gets one of the 8 palette hues (--k1..--k8) and an icon, picked from its own (subcategory) name,
+   so "Vehicle › Insurance" looks like Insurance. Unknown names get a stable hue from their name and a folder. */
+const ICONS={
+  id:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.3 1.5-2 2.5-2s1.9.7 2.5 2M14 10h4M14 14h3"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 2.6 15.2 0 18M12 3c-2.6 2.8-2.6 15.2 0 18"/>',
+  plane:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  wheel:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 14v7M10 12H3.2M14 12h6.8"/>',
+  car:'<path d="M5 16V12l2-5h10l2 5v4"/><path d="M3 16h18v2H3zM5 12h14"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="16.5" cy="18.5" r="1.5"/>',
+  cap:'<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5M22 9v5"/>',
+  case:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  wallet:'<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2M6 6l9-3 1 3"/>',
+  house:'<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
+  heart:'<path d="M12 20s-7-4.4-9-8.8A4.7 4.7 0 0 1 12 7a4.7 4.7 0 0 1 9 4.2C19 15.6 12 20 12 20z"/>',
+  shield:'<path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  award:'<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 7 5-3 5 3-1.5-7"/>',
+  receipt:'<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  alert:'<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+  check:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 13l2 2 4-4"/>',
+  doc:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+  disk:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+};
+const CAT_LOOK=[[/insur/,'shield',3],[/visa|immigra/,'globe',7],[/travel|passport/,'plane',1],[/licen[cs]e|driv/,'wheel',2],
+  [/accident/,'alert',8],[/purchase|invoice|receipt/,'receipt',4],[/regist/,'doc',1],[/test|inspect/,'check',6],[/vehicle|\bcar/,'car',8],
+  [/educat|school|degree/,'cap',4],[/employ|work|job|salary/,'case',1],[/financ|tax|bank/,'wallet',6],[/propert|tenan|lease|home|rent/,'house',2],
+  [/medic|health|hospital/,'heart',5],[/certif/,'award',5],[/identity|\bid\b/,'id',1]];
+function catLook(cat){
+  if(!cat||cat===NO_CAT)return{icon:'folder',k:0};
+  const leaf=cat.split(SUB).at(-1).toLowerCase(),hit=CAT_LOOK.find(([re])=>re.test(leaf));
+  if(hit)return{icon:hit[1],k:hit[2]};
+  let h=0;for(const ch of leaf)h=(h*31+ch.charCodeAt(0))>>>0;return{icon:'folder',k:1+h%8};
+}
+const kVar=k=>k?`var(--k${k})`:'var(--faint)';
+const svgIcon=(n,size=18)=>`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]||ICONS.folder}</svg>`;
+const bubble=(n,k,size)=>`<span class="bub" style="--c:${kVar(k)}">${svgIcon(n,size)}</span>`;
+const catBubble=cat=>{const l=catLook(cat);return bubble(l.icon,l.k)};
+const catStyle=cat=>`style="--c:${kVar(catLook(cat).k)}"`;
+/* file-type badge colours: PDF red, images aqua, spreadsheets green, Word blue */
+const EXT_K={PDF:8,JPG:3,JPEG:3,PNG:3,HEIC:3,WEBP:3,GIF:3,TIF:3,TIFF:3,XLSX:6,XLS:6,CSV:6,ODS:6,XLSM:6,DOCX:1,DOC:1,ODT:1,RTF:1,TXT:1};
+const extIc=d=>{const e=extOf(d.filename);return `<span class="ic" style="--c:${kVar(EXT_K[e]||0)}">${esc(e)}</span>`};
+/* people: a hue each, in the order they were added */
+const personK=name=>{const i=members.findIndex(m=>m.name===name);return i<0?0:1+i%8};
 function setHomeMode(on){$('#library').classList.toggle('is-home',on);$('#hero').hidden=!on}
+/* Quick facts on the banner: what needs attention first, then the size of the vault. */
+function heroFacts(ex,st){
+  const urgent=ex.expired.length+ex.month1.length,soon=ex.month3.length+ex.month6.length;
+  const fact=(ic,html,hot)=>`<span class="fact${hot?' hot':''}">${svgIcon(ic,15)}${html}</span>`;
+  return '<div class="facts">'+
+    (urgent?fact('alert',`<b>${urgent}</b> need${urgent===1?'s':''} attention`,true):fact('shield','Nothing urgent'))+
+    (soon?fact('clock',`<b>${soon}</b> expiring in 6 months`):'')+
+    fact('layers',`<b>${st.superseded}</b> older versions kept`)+
+    fact('disk',`<b>${fmtSize(st.bytes)}</b> stored`)+'</div>';
+}
 async function renderHome(seq){
   $('#crumb').hidden=true;$('#docs').innerHTML='';setHomeMode(true);
-  const [sum,all,recent,ex]=await Promise.all([
+  const [sum,all,recent,ex,st]=await Promise.all([
     api('/api/summary?'+new URLSearchParams({member:curMember})),
     curMember?api('/api/summary'):null,
     api('/api/documents?'+new URLSearchParams({member:curMember,limit:6})),
-    api('/api/expiring?'+new URLSearchParams({member:curMember}))]);
+    api('/api/expiring?'+new URLSearchParams({member:curMember})),
+    api('/api/stats?'+new URLSearchParams({member:curMember}))]);
   if(seq!==libSeq)return;
   const tot=all||sum;
   [recent,...Object.values(ex)].flat().forEach(d=>docsById[d.id]=d);
@@ -446,27 +701,29 @@ async function renderHome(seq){
   const rel=members.find(m=>m.name===curMember)?.relation;
   $('#hero').innerHTML=`<h2>${esc(who)}</h2><div class="sub">${plural(sum.total,'document')}`+
     (curMember?(rel?' · '+esc(rel):'')+' · <a data-who="">Whole family</a>'
-      :` · ${plural(members.length,'person')}`.replace('persons','people')+(binders.length?` · ${plural(binders.length,'binder')}`:''))+'</div>';
+      :` · ${plural(members.length,'person')}`.replace('persons','people')+(binders.length?` · ${plural(binders.length,'binder')}`:''))+'</div>'+
+    heroFacts(ex,st);
   let h=renderExpiring(ex);
   // people
-  const chip=(v,label,n,av)=>`<button class="chip${curMember===v?' on':''}" data-who="${esc(v)}"><span class="av">${av}</span><span class="lbl">${esc(label)}</span> <span class="n">${n}</span></button>`;
+  const chip=(v,label,n,av,cls='')=>`<button class="chip${curMember===v?' on':''}" data-who="${esc(v)}" style="--c:${kVar(personK(v))}"><span class="av ${cls}">${av}</span><span class="lbl">${esc(label)}</span> <span class="n">${n}</span></button>`;
   h+='<div class="sec"><div class="sh"><h3>People</h3><button class="more" data-go="family">Manage</button></div>'+
-    (members.length?'<div class="people">'+chip('','Everyone',tot.total,'∗')+
+    (members.length?'<div class="people">'+chip('','Everyone',tot.total,'∗','all')+
       members.map(m=>chip(m.name,m.name,m.count,esc(initials(m.name)))).join('')+
-      chip(SHARED,'Shared',tot.shared,'⌂')+'</div>'
+      chip(SHARED,'Shared',tot.shared,'⌂','shared')+'</div>'
       :'<div class="hint">Add the people in your family so each document can be filed under someone. <a data-go="family">Add people</a></div>')+'</div>';
   // categories
-  const full=cats.filter(c=>c.count),empty=cats.filter(c=>!c.count);
-  const cell=(c,n)=>`<button class="cell" data-cat="${esc(c)}"><span class="cn">${esc(catLabel(c))}</span><span class="cc">${n}</span></button>`;
+  const tops=topCats(),full=tops.filter(c=>c.count),empty=tops.filter(c=>!c.count);  // subcategories count towards their parent
+  const cell=(c,n)=>`<button class="cell cat" data-cat="${esc(c)}" ${catStyle(c)}>${catBubble(c)}<span class="cn">${esc(catLabel(c))}</span><span class="cc">${plural(n,'document')}</span></button>`;
   h+='<div class="sec"><div class="sh"><h3>Categories</h3></div>'+
     (full.length||sum.uncategorised?'<div class="grid">'+full.map(c=>cell(c.name,c.count)).join('')+(sum.uncategorised?cell(NO_CAT,sum.uncategorised):'')+'</div>'
       :'<div class="hint">Nothing filed here yet. Use <strong>+ Upload</strong> to add the first document.</div>')+
     (empty.length?'<div class="empties">Empty: '+empty.map(c=>`<button data-cat="${esc(c.name)}">${esc(c.name)}</button>`).join(' · ')+'</div>':'')+'</div>';
   // recent
   if(recent.length)h+='<div class="sec"><div class="sh"><h3>Recently added</h3></div><div class="rows">'+recent.map(d=>
-    `<div class="rw" data-doc="${d.id}"><span class="ic">${esc(extOf(d.filename))}</span><span class="t">${esc(d.title)}</span>`+
-    (curMember?'':`<span class="m">${esc(d.member||'Shared')}</span>`)+
+    `<div class="rw" data-doc="${d.id}">${extIc(d)}<span class="t">${esc(d.title)}</span>`+
+    (curMember?'':`<span class="m opt">${esc(d.member||'Shared')}</span>`)+
     `<span class="m opt">${esc(d.category||'Uncategorised')}</span><span class="m opt">${esc((d.doc_date||d.created_at).slice(0,10))}</span></div>`).join('')+'</div></div>';
+  h+=renderStats(st);
   // binders
   h+='<div class="sec"><div class="sh"><h3>Binders</h3><button class="more" data-go="binders">All binders</button></div>'+
     (binders.length?'<div class="rows">'+binders.slice(0,5).map(b=>
@@ -491,17 +748,19 @@ $('#home').onclick=e=>{
   const c=e.target.closest('[data-cat]');if(c)return openCat(c.dataset.cat);
   const b=e.target.closest('[data-binder]');if(b){openBinder=+b.dataset.binder;show('binders')}
 };
-$('#crumb').onclick=e=>{if(e.target.closest('[data-home]')){$('#q').value='';curCat==null?refreshLibrary():openCat(null)}};
+$('#crumb').onclick=e=>{if(e.target.closest('[data-home]')){$('#q').value='';curCat==null?refreshLibrary():openCat(null)}
+  const c=e.target.closest('[data-cat]');if(c)openCat(c.dataset.cat)};
 function snip(s){return esc(s).replace(/\x01/g,'<mark>').replace(/\x02/g,'</mark>')}
 function docHtml(d){
   const old=d.status!=='current';
-  return `<div class="doc ${old?'superseded':''}"><div class="main">
+  return `<div class="doc ${old?'superseded':''}" ${d.category?catStyle(d.category):''}><div class="main">
     <a class="title" data-act="view" data-id="${d.id}">${esc(d.title)}</a>
     ${d.version>1||old?`<span class="badge ${old?'old':''}">${old?'superseded · ':''}v${d.version}</span>`:''}
     <span class="badge who">${esc(d.member||'Shared')}</span>
     ${visaLabel(d)?`<span class="badge">${esc(visaLabel(d))}</span>`:''}
-    ${d.category?`<span class="badge">${esc(d.category)}</span>`:''}
+    ${d.category?`<span class="badge cat">${esc(d.category)}</span>`:''}
     ${expBadge(d)}
+    ${d.indexed===0?'<span class="badge" title="Reading the text (OCR for scans) so the contents can be searched">Indexing text…</span>':''}
     <div class="meta">${esc(d.filename)} · ${fmtSize(d.size)}${d.doc_date?' · '+esc(d.doc_date):''}${d.tags?' · '+esc(d.tags):''}</div>
     ${d.notes?`<div class="meta">${esc(d.notes)}</div>`:''}
     ${d.snippet?`<div class="snip">${snip(d.snippet)}</div>`:''}
@@ -509,18 +768,21 @@ function docHtml(d){
     <button class="btn sm pri" data-act="bind" data-id="${d.id}">+ Binder</button>
     <button class="btn sm" data-act="view" data-id="${d.id}">View</button>
     ${old?'':`<button class="btn sm" data-act="replace" data-id="${d.id}">New version</button>`}
+    ${old?'':`<button class="btn sm" data-act="older" data-id="${d.id}" title="Add an earlier copy to this document's history">Older copy</button>`}
     ${d.version>1||old?`<button class="btn sm" data-act="hist" data-id="${d.id}">History</button>`:''}
     <button class="btn sm" data-act="edit" data-id="${d.id}">Edit</button>
     <button class="btn sm danger" data-act="del" data-id="${d.id}">Delete</button>
   </div></div>`;
 }
 $('#docs').onclick=async e=>{
+  const sc=e.target.closest('[data-cat]');if(sc)return openCat(sc.dataset.cat);
   const b=e.target.closest('[data-act]');if(!b)return;
   const id=+b.dataset.id,d=docsById[id];
   switch(b.dataset.act){
     case'view':return viewDoc(d);
     case'bind':return addToBinder(id);
     case'replace':return openDocDialog('replace',d);
+    case'older':return openDocDialog('older',d);
     case'edit':return openDocDialog('edit',d);
     case'hist':return showHistory(id);
     case'del':
@@ -531,42 +793,179 @@ $('#docs').onclick=async e=>{
 
 /* ---------- upload / replace / edit ---------- */
 let mode='new',target=null,forceNext=false;
-function openDocDialog(m,d){
-  mode=m;target=d;forceNext=false;$('#docForm').reset();
-  $('#dlgTitle').textContent=m==='new'?'Upload document':m==='replace'?'Upload new version':'Edit details';
+function openDocDialog(m,d,keepFile){
+  const f=keepFile&&$('#fFile').files;
+  mode=m;target=d;forceNext=false;$('#docForm').reset();if(f)$('#fFile').files=f;
+  $('#dlgTitle').textContent=m==='new'?'Upload document':m==='replace'?'Upload new version':m==='older'?'Upload older copy':'Edit details';
   $('#fileRow').hidden=m==='edit';
   const note=$('#dlgNote');
   if(m==='replace'){note.hidden=false;note.textContent=`This replaces “${d.title}” as the current version. The old file is kept in history.`}
+  else if(m==='older'){note.hidden=false;note.textContent=`This is filed in the history of “${d.title}” as a superseded copy, placed by its document date (no date: oldest). “${d.title}” stays the current version.`}
   else note.hidden=true;
   $('#fMember').value=d?(d.member||SHARED):curMember;
   if(d){$('#fTitle').value=d.title;$('#fCat').value=d.category||'';$('#fDate').value=d.doc_date||'';$('#fTags').value=d.tags||'';$('#fNotes').value=m==='edit'?d.notes||'':''}
   if(m==='new'&&curCat&&curCat!==NO_CAT)$('#fCat').value=curCat;
   $('#fAck').checked=m==='edit'&&!!d.expiry_ack;
-  $('#fVisa').value=d?.visa_type||'';$('#fCountry').value=d?.visa_country||'';  // a renewal usually keeps all three
+  $('#fVisa').value=d?.visa_type||'';$('#fCountry').value=d?.visa_country||'';$('#fProv').value=d?.provider||'';  // a renewal usually keeps these
   const[vn,vu]=(d?.visa_validity||'').split(' ');$('#fValN').value=vn||'';$('#fValU').value=vu||'days';
   syncExpiry(m==='edit'?d.expiry_date||'':'');  // a new version gets its own expiry
   $('#dlgDoc').showModal();
 }
 $('#btnUpload').onclick=()=>openDocDialog('new');
+
+/* ---------- scanning: pages are kept on the server until the PDF is uploaded ---------- */
+let scannerInfo={configured:false},scan={session:'',pages:[],cropped:[],v:{}},scanFile=null;
+async function loadScanner(){
+  try{scannerInfo=await api('/api/scanner')}catch{scannerInfo={configured:false}}
+  $('#btnScan').hidden=$('#fScan').hidden=!scannerInfo.configured;
+}
+async function openScan(){
+  cropMode(false);$('#dlgScan').showModal();renderScan();
+  $('#sStatus').textContent='Checking the scanner…';
+  await loadScanner();const s=scannerInfo;
+  if(s.online){
+    $('#sDpi').innerHTML=s.resolutions.map(r=>`<option value="${r}"${r===300?' selected':''}>${r} dpi${r===300?' (recommended)':''}</option>`).join('');
+    $('#sPaper').innerHTML=s.paper.map(p=>`<option>${esc(p)}</option>`).join('');
+  }
+  $('#sStatus').textContent=s.online?`${s.model} · ${s.state==='Idle'?'Ready':s.state}`:s.error||'Scanner not available';
+  $('#sGo').disabled=!s.online;
+}
+function renderScan(){
+  $('#sThumbs').innerHTML=scan.pages.map((p,k)=>`<div class="thumb"><img src="/api/scan/${scan.session}/${p}?v=${scan.v[p]}" alt="Page ${k+1}" data-crop="${p}" title="Crop this page">
+    <button type="button" class="rm" data-rm="${p}" title="Remove this page">×</button><span>Page ${k+1}${scan.cropped.includes(p)?' · cropped':''}</span>
+    <button type="button" class="cr" data-crop="${p}">Crop</button></div>`).join('');
+  $('#sDone').disabled=!scan.pages.length;
+}
+$('#sGo').onclick=async()=>{
+  const b=$('#sGo');b.disabled=true;b.textContent='Scanning…';
+  try{scan=await api('/api/scan/pages',jreq('POST',{session:scan.session,color:$('#sColor').value,dpi:+$('#sDpi').value,paper:$('#sPaper').value}));
+    renderScan();$('#sStatus').textContent=`${scannerInfo.model} · ${scan.pages.length} page${scan.pages.length===1?'':'s'} scanned. Place the next page, or Done.`}
+  catch(er){toast(er.message);$('#sStatus').textContent=er.message}
+  finally{b.disabled=false;b.textContent='Scan page'}
+};
+$('#sThumbs').onclick=async e=>{
+  if(e.target.dataset.crop)return openCrop(e.target.dataset.crop);
+  const p=e.target.dataset.rm;if(!p)return;
+  scan=await api(`/api/scan/${scan.session}/${p}`,{method:'DELETE'});renderScan()};
+async function discardScan(){if(scan.session)api('/api/scan/'+scan.session,{method:'DELETE'}).catch(()=>{});scan={session:'',pages:[],cropped:[],v:{}};scanFile=null}
+
+/* Crop: the box starts on the document found on the glass; drag inside it to move, a corner to resize,
+   or anywhere outside it to draw a new box. Kept as fractions of the page. */
+let crop=null,cropDrag=null;
+const clamp01=v=>Math.min(Math.max(v,0),1);
+function drawCrop(){const b=$('#sCropBox').style;b.left=crop.x*100+'%';b.top=crop.y*100+'%';b.width=crop.w*100+'%';b.height=crop.h*100+'%'}
+function cropMode(on){$('#sMain').hidden=on;$('#sCropPane').hidden=!on}
+async function openCrop(p){
+  try{const s=await api(`/api/scan/${scan.session}/${p}/autocrop`);crop={page:p,x:s.x,y:s.y,w:s.w,h:s.h};
+    $('#sCropHint').textContent=s.found?'The box is on the document found on the glass. Drag it or its corners to adjust, then Apply crop.'
+      :'Drag across the page to mark the part to keep, or drag the corners. Then Apply crop.'}
+  catch(er){return toast(er.message)}
+  $('#sCropImg').src=`/api/scan/${scan.session}/${p}?v=${scan.v[p]}`;
+  $('#sUncrop').hidden=!scan.cropped.includes(p);
+  cropMode(true);drawCrop();
+}
+const cropPt=e=>{const r=$('#sCropImg').getBoundingClientRect();return[clamp01((e.clientX-r.left)/r.width),clamp01((e.clientY-r.top)/r.height)]};
+$('#sCropWrap').onpointerdown=e=>{
+  const[px,py]=cropPt(e),h=e.target.dataset.h;
+  if(h)cropDrag={h,c:{...crop}};
+  else if(e.target.id==='sCropBox')cropDrag={h:'move',sx:px,sy:py,c:{...crop}};
+  else{crop={...crop,x:px,y:py,w:0,h:0};cropDrag={h:'se',c:{...crop}}}
+  $('#sCropWrap').setPointerCapture(e.pointerId);e.preventDefault();drawCrop();
+};
+$('#sCropWrap').onpointermove=e=>{
+  if(!cropDrag)return;const[px,py]=cropPt(e),c=cropDrag.c,h=cropDrag.h;
+  if(h==='move'){crop.x=Math.min(Math.max(c.x+px-cropDrag.sx,0),1-c.w);crop.y=Math.min(Math.max(c.y+py-cropDrag.sy,0),1-c.h)}
+  else{let x0=c.x,y0=c.y,x1=c.x+c.w,y1=c.y+c.h;
+    if(h.includes('w'))x0=px;if(h.includes('e'))x1=px;if(h.includes('n'))y0=py;if(h.includes('s'))y1=py;
+    crop.x=Math.min(x0,x1);crop.y=Math.min(y0,y1);crop.w=Math.abs(x1-x0);crop.h=Math.abs(y1-y0)}
+  drawCrop();
+};
+$('#sCropWrap').onpointerup=$('#sCropWrap').onpointercancel=()=>cropDrag=null;
+$('#sCropBack').onclick=()=>cropMode(false);
+$('#sCropAll').onclick=()=>{crop={...crop,x:0,y:0,w:1,h:1};drawCrop()};
+$('#sUncrop').onclick=async()=>{try{scan=await api(`/api/scan/${scan.session}/${crop.page}/uncrop`,{method:'POST'});renderScan();cropMode(false)}catch(er){toast(er.message)}};
+$('#sCropApply').onclick=async()=>{
+  if(crop.w>0.995&&crop.h>0.995)return cropMode(false);  // whole page: nothing to cut
+  const b=$('#sCropApply');b.disabled=true;
+  try{scan=await api(`/api/scan/${scan.session}/${crop.page}/crop`,jreq('POST',{x:crop.x,y:crop.y,w:crop.w,h:crop.h}));renderScan();cropMode(false)}
+  catch(er){toast(er.message)}finally{b.disabled=false}
+};
+$('#sCancel').onclick=async()=>{
+  if(scan.pages.length&&!confirm(`Discard ${scan.pages.length} scanned page${scan.pages.length===1?'':'s'}?`))return;
+  await discardScan();$('#dlgScan').close()};
+$('#dlgScan').oncancel=e=>{e.preventDefault();$('#sCropPane').hidden?$('#sCancel').click():cropMode(false)};  // Esc leaves the crop view first
+/* Done: the PDF is attached to the upload form, which then works as for any chosen file. */
+$('#sDone').onclick=async()=>{
+  const b=$('#sDone');b.disabled=true;b.textContent='Making PDF…';
+  try{const r=await fetch(`/api/scan/${scan.session}/pdf`);if(!r.ok)throw new Error((await r.json()).detail);
+    const n=new Date(),pad=x=>String(x).padStart(2,'0');
+    scanFile=new File([await r.blob()],`Scan ${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())} ${pad(n.getHours())}${pad(n.getMinutes())}.pdf`,{type:'application/pdf'});
+    const dt=new DataTransfer();dt.items.add(scanFile);$('#fFile').files=dt.files;
+    $('#dlgScan').close();if(!$('#dlgDoc').open)openDocDialog('new',null,true);
+    syncExpiry();toast(`Scan attached (${scan.pages.length} page${scan.pages.length===1?'':'s'}). Fill in the details and Save.`)}
+  catch(er){toast(er.message)}
+  finally{b.disabled=!scan.pages.length;b.textContent='Done'}
+};
+$('#btnScan').onclick=()=>openScan();
+$('#fScan').onclick=()=>openScan();
+
+/* ---------- bulk upload (Purchase Documents etc.): one request per file, one after another ---------- */
+let bulkBusy=false,bulkStop=false;
+function openBulk(){
+  $('#bulkForm').reset();$('#bStatus').textContent='';
+  $('#bMember').innerHTML=$('#fMember').innerHTML;$('#bMember').value=curMember;
+  const bc=cats.map(c=>c.name).filter(isBulk);
+  $('#bCat').innerHTML=bc.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if(bc.includes(curCat))$('#bCat').value=curCat;
+  $('#dlgBulk').showModal();
+}
+$('#btnBulk').onclick=openBulk;
+$('#bCancel').onclick=()=>{if(!bulkBusy)return $('#dlgBulk').close();bulkStop=true;$('#bStatus').textContent='Stopping after this file…'};
+$('#dlgBulk').oncancel=e=>{if(bulkBusy){e.preventDefault();bulkStop=true}};  // Esc while uploading stops instead of hiding it
+$('#bulkForm').onsubmit=async e=>{
+  e.preventDefault();
+  const files=[...$('#bFiles').files],who=$('#bMember').value,btn=$('#bSave');
+  if(!files.length)return toast('Choose the files');
+  if(!who&&members.length)return toast('Choose who these documents belong to');
+  bulkBusy=true;bulkStop=false;btn.disabled=true;
+  const done=[],skipped=[],failed=[];
+  for(const[k,f]of files.entries()){
+    if(bulkStop)break;
+    const fd=new FormData();fd.append('file',f);fd.append('category',$('#bCat').value);fd.append('member',who===SHARED?'':who);
+    try{await uploadForm(fd,p=>$('#bStatus').textContent=`Uploading ${k+1} of ${files.length}: ${f.name} (${p}%)`);done.push(f.name)}
+    catch(er){if(er.status===409&&er.body.duplicate)skipped.push(`${f.name}: already in the vault (“${er.body.duplicate.title}”)`);
+      else failed.push(`${f.name}: ${er.message}`)}
+  }
+  bulkBusy=false;btn.disabled=false;
+  const left=files.length-done.length-skipped.length-failed.length;
+  const msg=[`${done.length} uploaded`,skipped.length&&`${skipped.length} skipped`,failed.length&&`${failed.length} failed`,left&&`${left} not started`].filter(Boolean).join(', ');
+  if(skipped.length||failed.length)$('#bStatus').innerHTML=esc(msg)+'<br>'+[...skipped,...failed].map(esc).join('<br>');  // keep it open to read
+  else $('#dlgBulk').close();
+  toast(msg);await loadMembers();await loadCats();refreshLibrary();
+};
 const validityValue=()=>{const n=parseInt($('#fValN').value,10);return !$('#fValRow').hidden&&n>0?`${n} ${$('#fValU').value}`:''};
 /* Switch the expiry field between required full date and optional month as the title/tags/file change. */
 function syncExpiry(v){
   const inp=$('#fExp');if(v===undefined)v=inp.value;
   const fn=$('#fFile').files[0]?.name||target?.filename||'';
-  const req=!(mode==='edit'&&target.status!=='current')&&needsExpiry($('#fCat').value,$('#fTitle').value||fn,$('#fTags').value,fn);
-  const full=req||v.length===10;
+  const hist=mode==='older'||(mode==='edit'&&target.status!=='current');  // superseded history: nothing required
+  const needs=needsExpiry($('#fCat').value,$('#fTitle').value||fn,$('#fTags').value,fn);
+  const req=!hist&&needs;  // history may leave it empty, but still takes a full date (an old month-only value is kept)
+  const full=(needs&&!(hist&&v.length===7))||v.length===10;
   inp.type=full?'date':'month';inp.value=full?(v.length===10?v:''):v.slice(0,7);
   inp.required=req;inp.placeholder=full?'YYYY-MM-DD':'YYYY-MM';
   $('#fAckRow').hidden=!canAck($('#fCat').value);
   const visa=hasVisaType($('#fCat').value);
-  const tf=typeFields[($('#fCat').value||'').trim().toLowerCase()];
+  const tf=typeFields[catRule($('#fCat').value,Object.keys(typeFields))];
   if(tf&&$('#fTypeLbl').dataset.cat!==tf.label){  // type label + suggestions follow the category (visa / license)
     $('#fTypeLbl').dataset.cat=tf.label;$('#fTypeLbl').textContent=tf.label+' (required)';
     $('#fVisa').placeholder='e.g. '+tf.options.slice(0,3).join(', ');
     $('#visaData').innerHTML=tf.options.map(t=>`<option value="${esc(t)}">`).join('');
   }
   $('#fVisaRow').hidden=$('#fValRow').hidden=!visa;
-  $('#fDateLbl').textContent=visa?'Issue date':'Document date';$('#fVisa').required=$('#fCountry').required=visa&&!(mode==='edit'&&target.status!=='current');
+  $('#fDateLbl').textContent=visa?'Issue date':'Document date';$('#fVisa').required=$('#fCountry').required=visa&&!hist;
+  const prov=hasProvider($('#fCat').value);$('#fProvRow').hidden=!prov;$('#fProv').required=prov&&!hist;
+  $('#fProvLbl').textContent=hist?'Provider':'Provider (required)';
   $('#fExpLbl').textContent=req?'Expiry date (required)':full?'Expiry date (optional)':'Expiry month (optional)';
 }
 ['#fTitle','#fTags','#fCat'].forEach(s=>$(s).addEventListener('input',()=>syncExpiry()));
@@ -588,22 +987,27 @@ $('#docForm').onsubmit=async e=>{
   try{
     btn.disabled=true;btn.textContent='Saving…';
     if(mode==='edit'){
-      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,visa_type:$('#fVisa').value,visa_country:$('#fCountry').value,visa_validity:validityValue(),tags:$('#fTags').value,notes:$('#fNotes').value}));
+      await api('/api/documents/'+target.id,jreq('PATCH',{title:$('#fTitle').value,member,category:$('#fCat').value,doc_date:$('#fDate').value,expiry_date:$('#fExp').value,expiry_ack:$('#fAck').checked,visa_type:$('#fVisa').value,visa_country:$('#fCountry').value,visa_validity:validityValue(),provider:$('#fProvRow').hidden?'':$('#fProv').value,tags:$('#fTags').value,notes:$('#fNotes').value}));
     }else{
       const f=$('#fFile').files[0];if(!f){toast('Choose a file');return}
       const fd=new FormData();fd.append('file',f);
-      fd.append('title',mode==='replace'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
-      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);fd.append('visa_type',$('#fVisa').value);fd.append('visa_country',$('#fCountry').value);fd.append('visa_validity',validityValue());
+      fd.append('title',mode!=='new'&&$('#fTitle').value===target.title?'':$('#fTitle').value);
+      fd.append('category',$('#fCat').value);fd.append('member',member);fd.append('doc_date',$('#fDate').value);fd.append('expiry_date',$('#fExp').value);fd.append('expiry_ack',$('#fAck').checked);fd.append('visa_type',$('#fVisa').value);fd.append('visa_country',$('#fCountry').value);fd.append('visa_validity',validityValue());if(!$('#fProvRow').hidden)fd.append('provider',$('#fProv').value);
       fd.append('tags',$('#fTags').value);fd.append('notes',$('#fNotes').value);
       if(mode==='replace')fd.append('supersedes_id',target.id);
+      if(mode==='older')fd.append('older_copy_of',target.id);
       if(forceNext)fd.append('force','true');
-      try{const r=await api('/api/documents',{method:'POST',body:fd});
-        if(r.converted_from)toast(`Converted ${r.converted_from} to JPG`)}
+      try{const r=await uploadForm(fd,p=>btn.textContent=p<100?`Uploading ${p}%`:'Saving…');
+        if(r.converted_from)toast(`Converted ${r.converted_from} to JPG`);
+        else if(mode==='older')toast(`Added to history as v${r.version}`);
+        else if(!r.indexed)toast('Saved. Contents become searchable once indexing finishes (a big scan can take a few minutes)')}
       catch(er){
         if(er.status===409&&er.body.duplicate&&confirm(`${er.message}: “${er.body.duplicate.title}”.\n\nUpload anyway?`)){
           forceNext=true;btn.disabled=false;btn.textContent='Save';return $('#docForm').requestSubmit()}
         throw er}
     }
+    const up=$('#fFile').files[0];
+    if(scanFile&&mode!=='edit'&&up&&up.name===scanFile.name&&up.size===scanFile.size)discardScan();  // uploaded: the scan pages are no longer needed
     $('#dlgDoc').close();if(mode==='edit'||!$('#toast').classList.contains('on'))toast('Saved');await loadMembers();await loadCats();refreshLibrary();
   }catch(er){toast(er.message)}finally{btn.disabled=false;btn.textContent='Save'}
 };
@@ -620,12 +1024,14 @@ function viewDoc(d){
 $('#vClose').onclick=()=>{$('#dlgView').close();$('#vFrame').src='about:blank'};
 
 /* ---------- history ---------- */
+let histCurrent=null;
 async function showHistory(id){
   const h=await api(`/api/documents/${id}/history`);
   $('#histBody').innerHTML=h.slice().reverse().map(d=>`<div class="bi"><span class="t"><strong>v${d.version}</strong> ${d.status==='current'?'<span class="badge">current</span>':'<span class="badge old">superseded</span>'}
     <div class="meta">${esc(d.filename)} · ${esc(d.created_at.replace('T',' '))}${d.doc_date?' · dated '+esc(d.doc_date):''}</div></span>
     <button class="btn sm" data-hv="${d.id}">View</button><button class="btn sm" data-hb="${d.id}">+ Binder</button></div>`).join('');
   h.forEach(d=>docsById[d.id]=docsById[d.id]||d);
+  histCurrent=h[h.length-1];
   $('#dlgHist').showModal();
 }
 $('#histBody').onclick=e=>{
@@ -633,6 +1039,7 @@ $('#histBody').onclick=e=>{
   if(e.target.dataset.hb)addToBinder(+e.target.dataset.hb);
 };
 $('#histClose').onclick=()=>$('#dlgHist').close();
+$('#histOlder').onclick=()=>{$('#dlgHist').close();openDocDialog('older',histCurrent)};
 
 /* ---------- binders ---------- */
 async function loadBinders(){
@@ -701,7 +1108,7 @@ async function loadExports(){
 }
 
 /* ---------- init ---------- */
-(async()=>{curCat=catFromHash();await loadExpiryRules();await loadMembers();await loadCats();await loadBinders();refreshLibrary()})();
+(async()=>{curCat=catFromHash();loadScanner();await loadExpiryRules();await loadMembers();await loadCats();await loadBinders();refreshLibrary()})();
 </script>
 </body>
 </html>
