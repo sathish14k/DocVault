@@ -59,10 +59,15 @@ PERMIT_CATEGORIES = {
 }
 # Every document filed under one of these categories also needs a full expiry date.
 EXPIRY_REQUIRED_CATEGORIES = list(PERMIT_CATEGORIES) + ["Travel", "Insurance"]
+# Documents in these categories may carry a validity (days, months or years from the issue / start date)
+# that fills in the expiry date.
+VALIDITY_CATEGORIES = list(PERMIT_CATEGORIES) + ["Insurance"]
 # Documents in these categories must have a type and issuing country.
 VISA_TYPE_CATEGORIES = list(PERMIT_CATEGORIES)
-# Documents in these categories must name their provider (insurer). Suggestions are the providers already used.
-PROVIDER_CATEGORIES = ["Insurance"]
+# Documents in these categories must name their provider: the insurer, or the employer for employment papers.
+# Value: the field's label. Suggestions are the values already used in that category. The column is named
+# provider because insurance came first.
+PROVIDER_CATEGORIES = {"Insurance": "Provider", "Employment": "Employer"}
 # Bulk categories (matched like the rules below, so "Vehicle › Purchase Documents" counts): many files can be
 # uploaded at once, each titled by its file name, and no rule asks for more. A file named "insurance.pdf" here
 # needs no expiry date or provider.
@@ -76,6 +81,8 @@ DEFAULT_CATEGORIES = [
     "Property & Tenancy", "Vehicle", "Medical", "Insurance", "Certificates", "Other",
     "Vehicle › Insurance", "Vehicle › Registration", "Vehicle › Testing", "Vehicle › Accident Reports",
     "Vehicle › Purchase Documents",
+    "Employment › Payslips", "Employment › Salary Breakup", "Employment › Offer & Appointment",
+    "Employment › Relieving & Experience",
 ]
 
 SCHEMA = """
@@ -377,24 +384,31 @@ def has_provider(category: Optional[str]) -> bool:
 
 
 def clean_provider(category: Optional[str], v: Optional[str], required: bool = True) -> str:
-    """Provider (insurer): required on current documents in PROVIDER_CATEGORIES; not kept on other documents."""
-    if not has_provider(category):
+    """Provider (insurer, employer): required on current documents in PROVIDER_CATEGORIES; not kept on others."""
+    rule = cat_rule(category, PROVIDER_CATEGORIES)
+    if not rule:
         return ""
     v = re.sub(r"\s+", " ", (v or "").strip())[:80]
     if required and not v:
-        raise HTTPException(400, f"Provider is required for {category.strip()} documents")
+        raise HTTPException(400, f"{PROVIDER_CATEGORIES[rule]} is required for {category.strip()} documents")
     return v
 
 
+def has_validity(category: Optional[str]) -> bool:
+    return bool(cat_rule(category, VALIDITY_CATEGORIES))
+
+
 def clean_validity(category: Optional[str], v: Optional[str]) -> str:
-    """Optional visa validity, stored as '<n> days' or '<n> months'; not kept on other documents."""
+    """Optional validity, stored as '<n> days', '<n> months' or '<n> years' ('1 year');
+    only kept in VALIDITY_CATEGORIES."""
     v = re.sub(r"\s+", " ", (v or "").strip().lower())
-    if not v or not has_visa_type(category):
+    if not v or not has_validity(category):
         return ""
-    m = re.fullmatch(r"(\d{1,4}) (day|month)s?", v)
-    if not m or int(m[1]) == 0:
-        raise HTTPException(400, "Validity must be a number of days or months, e.g. 30 days or 24 months")
-    return f"{int(m[1])} {m[2]}s"
+    m = re.fullmatch(r"(\d{1,4}) (day|month|year)s?", v)
+    if not m or int(m[1]) == 0 or (m[2] == "year" and int(m[1]) > 100):
+        raise HTTPException(400, "Validity must be a number of days, months or years, e.g. 30 days, 24 months or 1 year")
+    n = int(m[1])
+    return f"{n} {m[2]}" + ("" if n == 1 else "s")
 
 
 def expiry_from_validity(issue: str, validity: str) -> str:
@@ -406,9 +420,10 @@ def expiry_from_validity(issue: str, validity: str) -> str:
     if not validity:
         return ""
     n, unit = validity.split()
-    if unit == "days":
-        return (start + timedelta(days=int(n) - 1)).isoformat()
-    end = add_months(start, int(n))
+    n = int(n)
+    if unit.startswith("day"):
+        return (start + timedelta(days=n - 1)).isoformat()
+    end = add_months(start, n * 12 if unit.startswith("year") else n)
     if end.day < start.day:  # no such day in that month (31 Jan + 1 month): valid to its last day
         return end.isoformat()
     return (end - timedelta(days=1)).isoformat()
@@ -559,10 +574,12 @@ def expiry_rules():
     try:
         return {"required": EXPIRY_REQUIRED, "categories": EXPIRY_REQUIRED_CATEGORIES,
                 "ack_categories": EXPIRY_ACK_CATEGORIES, "visa_categories": VISA_TYPE_CATEGORIES,
+                "validity_categories": VALIDITY_CATEGORIES,
                 "type_fields": {c.lower(): {"label": label, "options": with_used(opts, "visa_type", c)}
                                 for c, (label, opts) in PERMIT_CATEGORIES.items()},
                 "countries": with_used(COUNTRIES, "visa_country"),
-                "provider_categories": PROVIDER_CATEGORIES, "providers": with_used([], "provider"),
+                "provider_fields": {c.lower(): {"label": label, "options": with_used([], "provider", c)}
+                                    for c, label in PROVIDER_CATEGORIES.items()},
                 "bulk_categories": BULK_CATEGORIES}
     finally:
         con.close()
@@ -881,7 +898,7 @@ def upload_document(
         if not expiry_date.strip() and visa_validity:
             expiry_date = expiry_from_validity(doc_date, visa_validity)
             if not expiry_date and not chain:
-                raise HTTPException(400, "Enter the issue date so the expiry can be calculated from the validity")
+                raise HTTPException(400, "Enter the issue / start date so the expiry can be calculated from the validity")
         # an older copy is superseded history, which is never forced to carry expiry or type/country
         full = needs_expiry(cat_name, title, tags, fname)
         expiry_date = clean_expiry(expiry_date, required=full and not chain, full=full)
